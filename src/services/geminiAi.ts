@@ -140,7 +140,12 @@ REQUIREMENTS:
    - </div>
 3. "telegramMarkdown": Urgent, punchy Telegram deal alert using emojis (🔥, ⚡, 🛒, 🏷️), price drop callout, strikethrough original price, 3 quick feature bullets, and clean direct link:
    🔥 *LOOT DEAL ALERT* 🔥\\n\\n*${product.title.replace(/[*_`]/g, '')}*\\n\\n💰 *Deal Price:* ${product.currentPrice} ~(${product.originalPrice || ''})~\\n📉 *Discount:* ${product.discountPercent || 'Huge Savings'}\\n\\n⚡ *Key Highlights:*\\n• High-performance segment leader\\n• Certified authentic with warranty\\n• Fast shipping available\\n\\n🛒 *Buy Now Before Deal Ends:*\\n👉 ${product.affiliateUrl}
-4. "whatsappMessage": A friendly 3-line deal alert for WhatsApp channels/groups with emojis and direct affiliate link.
+4. "whatsappMessage": A high-converting WhatsApp deal message. MUST include:
+   - Catchy price-drop alert line with emojis (🔥, ⚡)
+   - Product title
+   - Explicit price line showing current deal price: "💰 Deal Price: ${product.currentPrice}" and original MRP: "${product.originalPrice || ''}"
+   - Discount callout: "${product.discountPercent || 'Limited Time Offer'}"
+   - Direct affiliate link: "👉 Grab Deal: ${product.affiliateUrl}"
 5. "tweetText": A viral X/Twitter hook under 260 characters with discount %, direct affiliate link, and hashtags (#TechDeals #${product.platform} #Deals).
 
 Return ONLY valid JSON matching this exact structure:
@@ -157,12 +162,17 @@ Return ONLY valid JSON matching this exact structure:
       const responseText = result.response.text();
       const parsed = GeminiAiService.extractJsonFromResponse(responseText);
 
+      let whatsappMsg = parsed.whatsappMessage || this.generateFallbackElectronics(product).whatsappMessage;
+      if (whatsappMsg && !whatsappMsg.includes(product.currentPrice) && !whatsappMsg.includes('₹')) {
+        whatsappMsg = `🔥 *Price Drop Alert!*\n*${product.title}*\n\n💰 *Deal Price:* ${product.currentPrice} ${product.originalPrice ? `~(${product.originalPrice})~` : ''} (${product.discountPercent || 'Special Offer'})\n\n👉 Grab Deal: ${product.affiliateUrl}`;
+      }
+
       return {
         category: 'electronics',
         bloggerTitle: parsed.bloggerTitle || `${product.title} Review & Deals`,
         bloggerHtmlBody: parsed.bloggerHtmlBody || this.generateFallbackElectronics(product).bloggerHtmlBody,
         telegramMarkdown: parsed.telegramMarkdown || this.generateFallbackElectronics(product).telegramMarkdown,
-        whatsappMessage: parsed.whatsappMessage || this.generateFallbackElectronics(product).whatsappMessage,
+        whatsappMessage: whatsappMsg,
         tweetText: parsed.tweetText || this.generateFallbackElectronics(product).tweetText,
       };
     } catch {

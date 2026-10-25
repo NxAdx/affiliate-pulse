@@ -10,6 +10,8 @@ import {
   Linking,
   Share,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useAppStore } from '../../store/useAppStore';
 import { theme } from '../../theme';
 import { ProductScraper } from '../../services/productScraper';
@@ -17,11 +19,11 @@ import { GeminiAiService } from '../../services/geminiAi';
 import { BloggerService } from '../../services/bloggerApi';
 import { TelegramService } from '../../services/telegramBot';
 import { PinCardView } from '../../components/PinCardView';
-import { DealCategory } from '../../types';
 
 export default function GeneratorScreen() {
   const [inputUrl, setInputUrl] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const {
     selectedCategory,
@@ -35,6 +37,24 @@ export default function GeneratorScreen() {
     settings,
     addDealToHistory,
   } = useAppStore();
+
+  const handlePasteClipboard = async () => {
+    try {
+      const text = await Clipboard.getStringAsync();
+      if (text) {
+        setInputUrl(text.trim());
+        setStatusMessage('Pasted link from clipboard');
+      }
+    } catch {
+      setStatusMessage('Could not read clipboard');
+    }
+  };
+
+  const handleCopyText = async (text: string, key: string) => {
+    await Clipboard.setStringAsync(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2500);
+  };
 
   const handleGenerate = async () => {
     if (!inputUrl.trim()) {
@@ -66,7 +86,7 @@ export default function GeneratorScreen() {
       }
       setActiveContent(content);
 
-      // 3. Save to History
+      // 3. Save to History (persisted via MMKV)
       addDealToHistory({
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
@@ -134,6 +154,24 @@ export default function GeneratorScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* Top Engine Status Pill */}
+      <View style={styles.topBar}>
+        <View style={styles.engineBadge}>
+          <Ionicons
+            name={settings.geminiApiKey ? 'sparkles' : 'flash-outline'}
+            size={13}
+            color={settings.geminiApiKey ? theme.colors.primaryLight : theme.colors.accentWarning}
+          />
+          <Text style={styles.engineBadgeText}>
+            {settings.geminiApiKey ? 'GEMINI 1.5 PRO' : 'SMART OFFLINE ENGINE'}
+          </Text>
+        </View>
+        <View style={styles.vaultPill}>
+          <Ionicons name="lock-closed" size={11} color={theme.colors.accentDeal} />
+          <Text style={styles.vaultPillText}>MMKV VAULT</Text>
+        </View>
+      </View>
+
       {/* Category Pill Switcher */}
       <View style={styles.categoryRow}>
         <TouchableOpacity
@@ -142,14 +180,20 @@ export default function GeneratorScreen() {
             selectedCategory === 'electronics' && styles.categoryPillActive,
           ]}
           onPress={() => setSelectedCategory('electronics')}
+          activeOpacity={0.8}
         >
+          <Ionicons
+            name="hardware-chip-outline"
+            size={16}
+            color={selectedCategory === 'electronics' ? '#FFFFFF' : theme.colors.textMuted}
+          />
           <Text
             style={[
               styles.categoryPillText,
               selectedCategory === 'electronics' && styles.categoryPillTextActive,
             ]}
           >
-            ⚡ Tech & Electronics
+            Tech & Deals
           </Text>
         </TouchableOpacity>
 
@@ -159,53 +203,87 @@ export default function GeneratorScreen() {
             selectedCategory === 'fashion' && styles.categoryPillFashionActive,
           ]}
           onPress={() => setSelectedCategory('fashion')}
+          activeOpacity={0.8}
         >
+          <Ionicons
+            name="shirt-outline"
+            size={16}
+            color={selectedCategory === 'fashion' ? '#FFFFFF' : theme.colors.textMuted}
+          />
           <Text
             style={[
               styles.categoryPillText,
               selectedCategory === 'fashion' && styles.categoryPillTextActive,
             ]}
           >
-            👔 Men's Fashion (Pinterest)
+            Men's Fashion (Pin)
           </Text>
         </TouchableOpacity>
       </View>
 
       {/* URL Input Box */}
       <View style={styles.inputCard}>
-        <Text style={styles.inputLabel}>Product URL (Amazon / Flipkart / Myntra)</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="Paste deal link or shortlink here..."
-          placeholderTextColor={theme.colors.textMuted}
-          value={inputUrl}
-          onChangeText={setInputUrl}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+        <View style={styles.inputLabelRow}>
+          <Text style={styles.inputLabel}>Product URL / Deal Shortlink</Text>
+          <TouchableOpacity onPress={handlePasteClipboard} style={styles.pasteBtn} activeOpacity={0.7}>
+            <Ionicons name="clipboard-outline" size={13} color={theme.colors.primaryLight} />
+            <Text style={styles.pasteBtnText}>Paste</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.inputWrapper}>
+          <Ionicons name="link-outline" size={18} color={theme.colors.textMuted} style={styles.inputIcon} />
+          <TextInput
+            style={styles.textInput}
+            placeholder="Paste amzn.to, fkrt.it, Amazon, Flipkart..."
+            placeholderTextColor={theme.colors.textMuted}
+            value={inputUrl}
+            onChangeText={setInputUrl}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {inputUrl ? (
+            <TouchableOpacity onPress={() => setInputUrl('')} style={styles.clearBtn}>
+              <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
         <TouchableOpacity
           style={[styles.primaryButton, isProcessing && styles.buttonDisabled]}
           onPress={handleGenerate}
           disabled={isProcessing}
+          activeOpacity={0.85}
         >
           {isProcessing ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
-            <Text style={styles.primaryButtonText}>Generate Multi-Channel Deal</Text>
+            <View style={styles.primaryButtonInner}>
+              <Ionicons name="flash" size={18} color="#FFFFFF" />
+              <Text style={styles.primaryButtonText}>Generate Multi-Channel Deal</Text>
+            </View>
           )}
         </TouchableOpacity>
       </View>
 
       {/* Status feedback */}
-      {statusMessage ? <Text style={styles.statusText}>{statusMessage}</Text> : null}
+      {statusMessage ? (
+        <View style={styles.statusBox}>
+          <Ionicons name="information-circle-outline" size={16} color={theme.colors.primaryLight} />
+          <Text style={styles.statusText}>{statusMessage}</Text>
+        </View>
+      ) : null}
 
       {/* Live Preview Area */}
       {activeContent && (
         <View style={styles.previewContainer}>
           {selectedCategory === 'fashion' ? (
             <View style={styles.fashionPreview}>
-              <Text style={styles.previewHeading}>Pinterest 2:3 Pin Preview</Text>
+              <View style={styles.previewHeadingRow}>
+                <Ionicons name="logo-pinterest" size={18} color={theme.colors.pinterest} />
+                <Text style={styles.previewHeading}>Pinterest 2:3 Pin Preview</Text>
+              </View>
+
               <View style={styles.pinCenterWrap}>
                 <PinCardView
                   title={activeContent.pinterestTitle || activeProduct?.title || ''}
@@ -217,43 +295,121 @@ export default function GeneratorScreen() {
                   platform={activeProduct?.platform}
                 />
               </View>
-              <Text style={styles.tagsText}>
-                {activeContent.pinterestTags?.join(' ')}
-              </Text>
+
+              <View style={styles.tagWrap}>
+                <Text style={styles.tagsText}>
+                  {activeContent.pinterestTags?.join(' ')}
+                </Text>
+              </View>
             </View>
           ) : (
             <View style={styles.electronicsPreview}>
-              <Text style={styles.previewHeading}>SEO Review & Deal Channels</Text>
-              <Text style={styles.previewTitle}>{activeContent.bloggerTitle}</Text>
+              <View style={styles.previewHeadingRow}>
+                <Ionicons name="layers-outline" size={18} color={theme.colors.primaryLight} />
+                <Text style={styles.previewHeading}>Multi-Channel Syndication Ready</Text>
+              </View>
 
-              {/* Action Buttons */}
-              <View style={styles.actionGrid}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: theme.colors.blogger }]}
-                  onPress={handlePublishBlogger}
-                >
-                  <Text style={styles.actionBtnText}>Publish to Blogspot</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: theme.colors.telegram }]}
-                  onPress={handleBroadcastTelegram}
-                >
-                  <Text style={styles.actionBtnText}>Broadcast to Telegram</Text>
-                </TouchableOpacity>
-
+              {/* Card 1: WhatsApp Channel Alert */}
+              <View style={styles.channelCard}>
+                <View style={styles.channelCardHeader}>
+                  <View style={styles.channelTitleRow}>
+                    <Ionicons name="logo-whatsapp" size={18} color={theme.colors.whatsapp} />
+                    <Text style={styles.channelTitle}>WhatsApp Channel Message</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.copySmallBtn}
+                    onPress={() => handleCopyText(activeContent.whatsappMessage || '', 'whatsapp')}
+                  >
+                    <Ionicons
+                      name={copiedKey === 'whatsapp' ? 'checkmark' : 'copy-outline'}
+                      size={13}
+                      color={theme.colors.primaryLight}
+                    />
+                    <Text style={styles.copySmallBtnText}>
+                      {copiedKey === 'whatsapp' ? 'Copied' : 'Copy'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.previewCopyText}>{activeContent.whatsappMessage}</Text>
                 <TouchableOpacity
                   style={[styles.actionBtn, { backgroundColor: theme.colors.whatsapp }]}
                   onPress={handleShareWhatsApp}
+                  activeOpacity={0.85}
                 >
+                  <Ionicons name="share-social-outline" size={18} color="#FFFFFF" />
                   <Text style={styles.actionBtnText}>Share to WhatsApp</Text>
                 </TouchableOpacity>
+              </View>
 
+              {/* Card 2: Telegram Deal Channel */}
+              <View style={styles.channelCard}>
+                <View style={styles.channelCardHeader}>
+                  <View style={styles.channelTitleRow}>
+                    <Ionicons name="paper-plane-outline" size={18} color={theme.colors.telegram} />
+                    <Text style={styles.channelTitle}>Telegram Channel Alert</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.copySmallBtn}
+                    onPress={() => handleCopyText(activeContent.telegramMarkdown || '', 'telegram')}
+                  >
+                    <Ionicons
+                      name={copiedKey === 'telegram' ? 'checkmark' : 'copy-outline'}
+                      size={13}
+                      color={theme.colors.primaryLight}
+                    />
+                    <Text style={styles.copySmallBtnText}>
+                      {copiedKey === 'telegram' ? 'Copied' : 'Copy'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.previewCopyText} numberOfLines={4}>
+                  {activeContent.telegramMarkdown}
+                </Text>
                 <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: theme.colors.x }]}
-                  onPress={handleShareX}
+                  style={[styles.actionBtn, { backgroundColor: theme.colors.telegram }]}
+                  onPress={handleBroadcastTelegram}
+                  activeOpacity={0.85}
                 >
-                  <Text style={styles.actionBtnText}>Share on X</Text>
+                  <Ionicons name="paper-plane" size={18} color="#FFFFFF" />
+                  <Text style={styles.actionBtnText}>Broadcast to Telegram Channel</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Card 3: Google Blogger (Blogspot) */}
+              <View style={styles.channelCard}>
+                <View style={styles.channelCardHeader}>
+                  <View style={styles.channelTitleRow}>
+                    <Ionicons name="newspaper-outline" size={18} color={theme.colors.blogger} />
+                    <Text style={styles.channelTitle}>SEO 500-Word Article</Text>
+                  </View>
+                </View>
+                <Text style={styles.previewArticleTitle}>{activeContent.bloggerTitle}</Text>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: theme.colors.blogger }]}
+                  onPress={handlePublishBlogger}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="cloud-upload-outline" size={18} color="#FFFFFF" />
+                  <Text style={styles.actionBtnText}>Publish to Blogspot</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Card 4: X / Twitter */}
+              <View style={styles.channelCard}>
+                <View style={styles.channelCardHeader}>
+                  <View style={styles.channelTitleRow}>
+                    <Ionicons name="logo-twitter" size={18} color={theme.colors.primaryLight} />
+                    <Text style={styles.channelTitle}>X (Twitter) Deal Hook</Text>
+                  </View>
+                </View>
+                <Text style={styles.previewCopyText}>{activeContent.tweetText}</Text>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: '#1E293B', borderWidth: 1, borderColor: theme.colors.borderSubtle }]}
+                  onPress={handleShareX}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="logo-twitter" size={18} color="#FFFFFF" />
+                  <Text style={styles.actionBtnText}>Post to X</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -271,6 +427,47 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: theme.spacing.md,
+    paddingBottom: 48,
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  engineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: theme.radii.full,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+  },
+  engineBadgeText: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.typography.sizes.xxs,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  vaultPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.colors.accentDealGlow,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: theme.radii.full,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+  },
+  vaultPillText: {
+    color: theme.colors.accentDeal,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   categoryRow: {
     flexDirection: 'row',
@@ -279,60 +476,103 @@ const styles = StyleSheet.create({
   },
   categoryPill: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: theme.radii.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.surfaceBorder,
-    alignItems: 'center',
+    borderColor: theme.colors.borderSubtle,
+    borderRadius: theme.radii.md,
+    paddingVertical: 12,
   },
   categoryPillActive: {
-    backgroundColor: theme.colors.primaryDark,
+    backgroundColor: theme.colors.primary,
     borderColor: theme.colors.primaryLight,
+    ...theme.shadows.glowPrimary,
   },
   categoryPillFashionActive: {
-    backgroundColor: '#9D174D',
-    borderColor: theme.colors.secondary,
+    backgroundColor: theme.colors.secondary,
+    borderColor: theme.colors.secondaryLight,
+    ...theme.shadows.glowSecondary,
   },
   categoryPillText: {
     color: theme.colors.textMuted,
     fontSize: theme.typography.sizes.sm,
-    fontWeight: theme.typography.weights.semibold,
+    fontWeight: '600',
   },
   categoryPillTextActive: {
     color: '#FFFFFF',
+    fontWeight: '700',
   },
   inputCard: {
     backgroundColor: theme.colors.surface,
-    padding: 16,
     borderRadius: theme.radii.lg,
     borderWidth: 1,
-    borderColor: theme.colors.surfaceBorder,
+    borderColor: theme.colors.borderSubtle,
+    padding: 16,
     marginBottom: 16,
+    ...theme.shadows.card,
+  },
+  inputLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   inputLabel: {
     color: theme.colors.textSecondary,
-    fontSize: theme.typography.sizes.sm,
-    marginBottom: 8,
-    fontWeight: theme.typography.weights.medium,
+    fontSize: theme.typography.sizes.xs,
+    fontWeight: '600',
   },
-  textInput: {
+  pasteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.colors.primaryGlow,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: theme.radii.xs,
+  },
+  pasteBtnText: {
+    color: theme.colors.primaryLight,
+    fontSize: theme.typography.sizes.xxs,
+    fontWeight: '700',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: theme.colors.background,
-    color: theme.colors.textPrimary,
-    padding: 12,
-    borderRadius: theme.radii.sm,
+    borderRadius: theme.radii.md,
     borderWidth: 1,
     borderColor: theme.colors.surfaceBorder,
-    fontSize: theme.typography.sizes.base,
+    paddingHorizontal: 12,
     marginBottom: 14,
+  },
+  inputIcon: {
+    marginRight: 8,
+  },
+  textInput: {
+    flex: 1,
+    color: theme.colors.textPrimary,
+    paddingVertical: 12,
+    fontSize: theme.typography.sizes.sm,
+  },
+  clearBtn: {
+    padding: 4,
   },
   primaryButton: {
     backgroundColor: theme.colors.primary,
-    paddingVertical: 14,
     borderRadius: theme.radii.md,
+    paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
     ...theme.shadows.glowPrimary,
+  },
+  primaryButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -340,60 +580,146 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.sizes.base,
-    fontWeight: theme.typography.weights.bold,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  statusBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.colors.surface,
+    padding: 12,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    marginBottom: 16,
   },
   statusText: {
-    color: theme.colors.accentWarning,
-    textAlign: 'center',
-    marginBottom: 16,
-    fontSize: theme.typography.sizes.sm,
+    color: theme.colors.textPrimary,
+    fontSize: theme.typography.sizes.xs,
+    fontWeight: '500',
+    flex: 1,
   },
   previewContainer: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.lg,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.surfaceBorder,
-  },
-  previewHeading: {
-    color: theme.colors.textSecondary,
-    fontSize: theme.typography.sizes.sm,
-    fontWeight: theme.typography.weights.bold,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 12,
+    marginTop: 8,
   },
   fashionPreview: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    padding: 16,
     alignItems: 'center',
+    ...theme.shadows.card,
+  },
+  previewHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+    alignSelf: 'flex-start',
+  },
+  previewHeading: {
+    color: theme.colors.textPrimary,
+    fontSize: theme.typography.sizes.base,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   pinCenterWrap: {
     alignItems: 'center',
-    marginVertical: 12,
+    justifyContent: 'center',
+    marginVertical: 8,
+  },
+  tagWrap: {
+    marginTop: 12,
+    backgroundColor: theme.colors.background,
+    padding: 10,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    width: '100%',
   },
   tagsText: {
-    color: theme.colors.secondary,
+    color: theme.colors.secondaryLight,
     fontSize: theme.typography.sizes.xs,
-    marginTop: 8,
+    fontWeight: '600',
     textAlign: 'center',
   },
-  electronicsPreview: {},
-  previewTitle: {
-    color: theme.colors.textPrimary,
-    fontSize: theme.typography.sizes.lg,
-    fontWeight: theme.typography.weights.bold,
-    marginBottom: 16,
+  electronicsPreview: {
+    gap: 14,
   },
-  actionGrid: {
-    gap: 10,
+  channelCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    padding: 16,
+    ...theme.shadows.card,
+  },
+  channelCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  channelTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  channelTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: theme.typography.sizes.sm,
+    fontWeight: '700',
+  },
+  copySmallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.colors.primaryGlow,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: theme.radii.xs,
+  },
+  copySmallBtnText: {
+    color: theme.colors.primaryLight,
+    fontSize: theme.typography.sizes.xxs,
+    fontWeight: '700',
+  },
+  previewCopyText: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.typography.sizes.xs,
+    lineHeight: 18,
+    backgroundColor: theme.colors.background,
+    padding: 12,
+    borderRadius: theme.radii.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    marginBottom: 12,
+  },
+  previewArticleTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: theme.typography.sizes.sm,
+    fontWeight: '600',
+    backgroundColor: theme.colors.background,
+    padding: 12,
+    borderRadius: theme.radii.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    marginBottom: 12,
   },
   actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     paddingVertical: 12,
     borderRadius: theme.radii.md,
-    alignItems: 'center',
   },
   actionBtnText: {
     color: '#FFFFFF',
-    fontWeight: theme.typography.weights.bold,
-    fontSize: theme.typography.sizes.base,
+    fontWeight: '700',
+    fontSize: theme.typography.sizes.sm,
+    letterSpacing: 0.2,
   },
 });

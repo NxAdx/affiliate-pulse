@@ -1,5 +1,39 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
+import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
+import { MMKV } from 'react-native-mmkv';
 import { AppSettings, DealCategory, DealRecord, ProductMetadata, GeneratedContent } from '../types';
+
+let mmkvInstance: MMKV | null = null;
+try {
+  mmkvInstance = new MMKV({ id: 'affiliate-pulse-storage' });
+} catch {
+  // Graceful fallback for headless/test environments
+}
+
+const memoryStore = new Map<string, string>();
+
+const mmkvStorage: StateStorage = {
+  setItem: (name, value) => {
+    if (mmkvInstance) {
+      mmkvInstance.set(name, value);
+    } else {
+      memoryStore.set(name, value);
+    }
+  },
+  getItem: (name) => {
+    if (mmkvInstance) {
+      return mmkvInstance.getString(name) ?? null;
+    }
+    return memoryStore.get(name) ?? null;
+  },
+  removeItem: (name) => {
+    if (mmkvInstance) {
+      mmkvInstance.delete(name);
+    } else {
+      memoryStore.delete(name);
+    }
+  },
+};
 
 interface AppState {
   // Active Workspace State
@@ -39,31 +73,44 @@ const DEFAULT_SETTINGS: AppSettings = {
   pinterestBoardId: '',
 };
 
-export const useAppStore = create<AppState>((set) => ({
-  selectedCategory: 'electronics',
-  setSelectedCategory: (category) => set({ selectedCategory: category }),
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      selectedCategory: 'electronics',
+      setSelectedCategory: (category) => set({ selectedCategory: category }),
 
-  activeProduct: null,
-  setActiveProduct: (product) => set({ activeProduct: product }),
+      activeProduct: null,
+      setActiveProduct: (product) => set({ activeProduct: product }),
 
-  activeContent: null,
-  setActiveContent: (content) => set({ activeContent: content }),
+      activeContent: null,
+      setActiveContent: (content) => set({ activeContent: content }),
 
-  isProcessing: false,
-  setIsProcessing: (val) => set({ isProcessing: val }),
+      isProcessing: false,
+      setIsProcessing: (val) => set({ isProcessing: val }),
 
-  dealsHistory: [],
-  addDealToHistory: (deal) =>
-    set((state) => ({ dealsHistory: [deal, ...state.dealsHistory] })),
-  removeDealFromHistory: (id) =>
-    set((state) => ({
-      dealsHistory: state.dealsHistory.filter((item) => item.id !== id),
-    })),
-  clearHistory: () => set({ dealsHistory: [] }),
+      dealsHistory: [],
+      addDealToHistory: (deal) =>
+        set((state) => ({ dealsHistory: [deal, ...state.dealsHistory] })),
+      removeDealFromHistory: (id) =>
+        set((state) => ({
+          dealsHistory: state.dealsHistory.filter((item) => item.id !== id),
+        })),
+      clearHistory: () => set({ dealsHistory: [] }),
 
-  settings: DEFAULT_SETTINGS,
-  updateSettings: (partial) =>
-    set((state) => ({
-      settings: { ...state.settings, ...partial },
-    })),
-}));
+      settings: DEFAULT_SETTINGS,
+      updateSettings: (partial) =>
+        set((state) => ({
+          settings: { ...state.settings, ...partial },
+        })),
+    }),
+    {
+      name: 'affiliate-pulse-vault',
+      storage: createJSONStorage(() => mmkvStorage),
+      partialize: (state) => ({
+        settings: state.settings,
+        dealsHistory: state.dealsHistory,
+        selectedCategory: state.selectedCategory,
+      }),
+    }
+  )
+);
