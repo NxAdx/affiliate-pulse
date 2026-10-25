@@ -4,17 +4,25 @@
     "slug": "affiliate-pulse",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "scheme": "affiliatepulse",
     "android": {
       "package": "com.nxadx.affiliatepulse",
+      "launchMode": "singleTask",
       "intentFilters": [
         {
           "action": "SEND",
-          "category": ["DEFAULT"],
-          "data": {
-            "mimeType": "text/plain"
-          }
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "mimeType": "text/*"
+            },
+            {
+              "mimeType": "text/plain"
+            }
+          ]
         }
       ]
     },
