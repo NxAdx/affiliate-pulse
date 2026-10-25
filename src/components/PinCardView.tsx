@@ -1,14 +1,17 @@
-﻿import React, { forwardRef } from 'react';
-import { View, Text, Image, StyleSheet, Dimensions } from 'react-native';
+import React, { forwardRef } from 'react';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import { theme } from '../theme';
 
-interface PinCardViewProps {
+export interface PinCardViewProps {
   title: string;
   badgeText?: string;
   priceTag: string;
   originalPrice?: string;
   discountPercent?: string;
   imageUrl: string;
+  platform?: 'amazon' | 'flipkart' | 'myntra' | 'other';
+  width?: number;
+  height?: number;
 }
 
 export const PinCardView = forwardRef<View, PinCardViewProps>(
@@ -20,47 +23,70 @@ export const PinCardView = forwardRef<View, PinCardViewProps>(
       originalPrice,
       discountPercent = 'HOT DEAL',
       imageUrl,
+      platform = 'other',
+      width = 320,
+      height = 480, // Strict 2:3 aspect ratio (320x480 default -> scales cleanly)
     },
     ref
   ) => {
-    return (
-      <View ref={ref} style={styles.cardContainer} collapsable={false}>
-        {/* Product Image */}
-        <Image source={{ uri: imageUrl }} style={styles.backgroundImage} resizeMode="cover" />
+    // Format numeric price
+    const cleanPrice = priceTag.replace(/[^0-9,]/g, '') || priceTag;
+    const platformLabel = platform === 'myntra' ? 'MYNTRA' : platform === 'amazon' ? 'AMAZON' : platform === 'flipkart' ? 'FLIPKART' : 'STORE';
 
-        {/* Top Floating Badge */}
-        <View style={styles.topBadgeContainer}>
-          <View style={styles.badgePill}>
-            <Text style={styles.badgeText}>{badgeText.toUpperCase()}</Text>
+    return (
+      <View
+        ref={ref}
+        style={[styles.cardContainer, { width, height }]}
+        collapsable={false}
+      >
+        {/* Full-bleed Product Image */}
+        <Image
+          source={{ uri: imageUrl }}
+          style={styles.backgroundImage}
+          resizeMode="cover"
+        />
+
+        {/* Top Floating Badges Bar */}
+        <View style={styles.topBadgeRow}>
+          {/* Trend / Style Vibe Badge */}
+          <View style={styles.vibeBadge}>
+            <Text style={styles.vibeBadgeText}>✨ {badgeText.toUpperCase()}</Text>
+          </View>
+
+          {/* Retailer / Platform Tag */}
+          <View style={styles.platformBadge}>
+            <Text style={styles.platformBadgeText}>{platformLabel}</Text>
           </View>
         </View>
 
-        {/* Bottom Gradient / Card Overlay */}
+        {/* Bottom Editorial Scrim & Price Overlay */}
         <View style={styles.bottomOverlay}>
           {/* Price & Discount Row */}
           <View style={styles.priceRow}>
             <View style={styles.priceContainer}>
               <Text style={styles.currencySymbol}>₹</Text>
-              <Text style={styles.priceValue}>{priceTag.replace(/[^0-9]/g, '')}</Text>
+              <Text style={styles.priceValue}>{cleanPrice}</Text>
             </View>
 
-            {originalPrice && (
+            {originalPrice ? (
               <Text style={styles.originalPriceText}>{originalPrice}</Text>
-            )}
+            ) : null}
 
-            <View style={styles.discountPill}>
-              <Text style={styles.discountText}>{discountPercent}</Text>
-            </View>
+            {discountPercent ? (
+              <View style={styles.discountPill}>
+                <Text style={styles.discountText}>{discountPercent.toUpperCase()}</Text>
+              </View>
+            ) : null}
           </View>
 
-          {/* Pin Title */}
+          {/* Pin Headline / Styling Hook */}
           <Text style={styles.titleText} numberOfLines={2}>
             {title}
           </Text>
 
-          {/* Visual CTA Bar */}
+          {/* High-Converting CTA Button */}
           <View style={styles.ctaBar}>
-            <Text style={styles.ctaText}>TAP TO VIEW DEAL &rarr;</Text>
+            <Text style={styles.ctaText}>TAP TO SHOP THE LOOK &rarr;</Text>
           </View>
         </View>
       </View>
@@ -72,12 +98,12 @@ PinCardView.displayName = 'PinCardView';
 
 const styles = StyleSheet.create({
   cardContainer: {
-    width: 320,
-    height: 480, // Strict 2:3 vertical aspect ratio (320x480 -> 1000x1500 render)
-    borderRadius: theme.radii.lg,
+    borderRadius: theme.radii.xl,
     overflow: 'hidden',
     backgroundColor: '#0F172A',
     position: 'relative',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     ...theme.shadows.card,
   },
   backgroundImage: {
@@ -87,44 +113,68 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
   },
-  topBadgeContainer: {
+  topBadgeRow: {
     position: 'absolute',
-    top: 16,
-    left: 16,
+    top: 14,
+    left: 14,
+    right: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     zIndex: 10,
   },
-  badgePill: {
-    backgroundColor: theme.colors.secondary,
+  vibeBadge: {
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: theme.radii.sm,
+    borderRadius: theme.radii.full,
+    borderWidth: 1,
+    borderColor: 'rgba(236, 72, 153, 0.6)', // Accent Magenta border
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.4,
     shadowRadius: 4,
-    elevation: 4,
+    elevation: 5,
   },
-  badgeText: {
-    color: '#FFFFFF',
+  vibeBadgeText: {
+    color: '#F472B6',
     fontSize: theme.typography.sizes.xs,
     fontWeight: theme.typography.weights.black,
-    letterSpacing: 1,
+    letterSpacing: 0.6,
+  },
+  platformBadge: {
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: theme.radii.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  platformBadgeText: {
+    color: '#F8FAFC',
+    fontSize: 10,
+    fontWeight: theme.typography.weights.bold,
+    letterSpacing: 0.8,
   },
   bottomOverlay: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 16,
-    backgroundColor: 'rgba(15, 23, 42, 0.88)',
-    borderTopLeftRadius: theme.radii.md,
-    borderTopRightRadius: theme.radii.md,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 18,
+    backgroundColor: 'rgba(11, 15, 23, 0.92)',
+    borderTopLeftRadius: theme.radii.lg,
+    borderTopRightRadius: theme.radii.lg,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   priceContainer: {
     flexDirection: 'row',
@@ -133,46 +183,56 @@ const styles = StyleSheet.create({
   currencySymbol: {
     color: theme.colors.accentDeal,
     fontSize: theme.typography.sizes.lg,
-    fontWeight: theme.typography.weights.bold,
+    fontWeight: theme.typography.weights.black,
+    marginRight: 1,
   },
   priceValue: {
     color: theme.colors.accentDeal,
     fontSize: theme.typography.sizes.xxl,
     fontWeight: theme.typography.weights.black,
+    letterSpacing: -0.5,
   },
   originalPriceText: {
     color: theme.colors.textMuted,
     fontSize: theme.typography.sizes.sm,
     textDecorationLine: 'line-through',
+    fontWeight: theme.typography.weights.medium,
   },
   discountPill: {
-    backgroundColor: theme.colors.accentWarning,
+    backgroundColor: '#F59E0B',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: theme.radii.sm,
   },
   discountText: {
     color: '#000000',
-    fontSize: theme.typography.sizes.xs,
-    fontWeight: theme.typography.weights.bold,
+    fontSize: 10,
+    fontWeight: theme.typography.weights.black,
+    letterSpacing: 0.4,
   },
   titleText: {
-    color: theme.colors.textPrimary,
+    color: '#FFFFFF',
     fontSize: theme.typography.sizes.base,
-    fontWeight: theme.typography.weights.semibold,
+    fontWeight: theme.typography.weights.bold,
     lineHeight: 20,
     marginBottom: 12,
+    letterSpacing: 0.1,
   },
   ctaBar: {
     backgroundColor: theme.colors.primary,
-    paddingVertical: 8,
-    borderRadius: theme.radii.sm,
+    paddingVertical: 10,
+    borderRadius: theme.radii.md,
     alignItems: 'center',
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 4,
   },
   ctaText: {
     color: '#FFFFFF',
     fontSize: theme.typography.sizes.xs,
-    fontWeight: theme.typography.weights.bold,
-    letterSpacing: 0.8,
+    fontWeight: theme.typography.weights.black,
+    letterSpacing: 1,
   },
 });

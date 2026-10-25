@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -214,6 +214,7 @@ export default function GeneratorScreen() {
                   originalPrice={activeProduct?.originalPrice}
                   discountPercent={activeProduct?.discountPercent}
                   imageUrl={activeProduct?.imageUrl || ''}
+                  platform={activeProduct?.platform}
                 />
               </View>
               <Text style={styles.tagsText}>
