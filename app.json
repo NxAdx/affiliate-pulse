@@ -1,0 +1,25 @@
+﻿{
+  "expo": {
+    "name": "Affiliate Pulse",
+    "slug": "affiliate-pulse",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "affiliatepulse",
+    "android": {
+      "package": "com.nxadx.affiliatepulse",
+      "intentFilters": [
+        {
+          "action": "SEND",
+          "category": ["DEFAULT"],
+          "data": {
+            "mimeType": "text/plain"
+          }
+        }
+      ]
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}

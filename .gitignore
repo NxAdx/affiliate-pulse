@@ -1,0 +1,25 @@
+﻿# Dependencies
+node_modules/
+.expo/
+dist/
+
+# Local Memory & Directives (Excluded from Git)
+.agents/
+AGENTS.md
+GEMINI.md
+docs/
+
+# Secrets & Credentials
+*.keystore
+*.jks
+.env*
+security/
+google-services.json
+
+# Builds & Outputs
+android/
+ios/
+*.apk
+*.aab
+*.log
+*.tmp
