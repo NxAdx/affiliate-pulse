@@ -1,18 +1,103 @@
-﻿import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { GeneratedContent, ProductMetadata } from '../types';
 
 export class GeminiAiService {
   private client: GoogleGenerativeAI | null = null;
 
   constructor(apiKey: string) {
-    if (apiKey) {
-      this.client = new GoogleGenerativeAI(apiKey);
+    if (apiKey && apiKey.trim().length > 0) {
+      try {
+        this.client = new GoogleGenerativeAI(apiKey.trim());
+      } catch {
+        this.client = null;
+      }
+    }
+  }
+
+  /**
+   * Robust multi-stage JSON extractor that safely handles LLM formatting quirks:
+   * 1. Markdown code fences (```json ... ```)
+   * 2. Outer preamble/postamble conversational text
+   * 3. Trailing commas before closing braces
+   * 4. Unescaped control characters in multi-line HTML strings
+   * 5. Regex field extraction fallback if strict JSON parsing fails
+   */
+  static extractJsonFromResponse(rawText: string): any {
+    if (!rawText || !rawText.trim()) {
+      throw new Error('Empty response received from AI model');
+    }
+
+    let text = rawText.trim();
+
+    // 1. Strip markdown fences if wrapped
+    const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (fenceMatch && fenceMatch[1]) {
+      text = fenceMatch[1].trim();
+    }
+
+    // 2. Extract outermost JSON object
+    const startIdx = text.indexOf('{');
+    const endIdx = text.lastIndexOf('}');
+    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+      text = text.substring(startIdx, endIdx + 1);
+    }
+
+    // 3. Attempt direct JSON.parse
+    try {
+      return JSON.parse(text);
+    } catch {
+      // 4. Sanitize common LLM quirks: trailing commas and raw control characters
+      try {
+        const sanitized = text
+          .replace(/,\s*([}\]])/g, '$1')
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, (c) => {
+            if (c === '\n') return '\\n';
+            if (c === '\r') return '\\r';
+            if (c === '\t') return '\\t';
+            return '';
+          });
+        return JSON.parse(sanitized);
+      } catch {
+        // 5. Fallback regex extraction for individual fields
+        const extractField = (fieldName: string): string => {
+          const regex = new RegExp(`"${fieldName}"\\s*:\\s*"([\\s\\S]*?)(?<!\\\\)"`, 'i');
+          const match = text.match(regex);
+          return match ? match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t') : '';
+        };
+
+        const bloggerTitle = extractField('bloggerTitle');
+        const bloggerHtmlBody = extractField('bloggerHtmlBody');
+        const telegramMarkdown = extractField('telegramMarkdown');
+        const whatsappMessage = extractField('whatsappMessage');
+        const tweetText = extractField('tweetText');
+        const pinterestTitle = extractField('pinterestTitle');
+        const pinterestDescription = extractField('pinterestDescription');
+        const pinBadgeText = extractField('pinBadgeText');
+        const pinPriceTag = extractField('pinPriceTag');
+
+        if (bloggerTitle || pinterestTitle) {
+          return {
+            bloggerTitle,
+            bloggerHtmlBody,
+            telegramMarkdown,
+            whatsappMessage,
+            tweetText,
+            pinterestTitle,
+            pinterestDescription,
+            pinBadgeText,
+            pinPriceTag,
+            pinterestTags: ['#MensFashion', '#Style', '#Deals'],
+          };
+        }
+
+        throw new Error('Could not parse valid content payload from AI response');
+      }
     }
   }
 
   /**
    * Generates comprehensive content for Tech & Electronics
-   * (Blogger SEO Review + Telegram Deal Alert + WhatsApp/X hooks)
+   * (Blogger 500-word SEO Review + Telegram Deal Alert + WhatsApp/X hooks)
    */
   async generateElectronicsDeal(product: ProductMetadata): Promise<GeneratedContent> {
     if (!this.client) {
@@ -20,37 +105,65 @@ export class GeminiAiService {
     }
 
     try {
-      const model = this.client.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = this.client.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        generationConfig: {
+          temperature: 0.7,
+          topP: 0.95,
+        },
+      });
+
       const prompt = `
-You are an expert affiliate marketer and SEO tech copywriter.
-Create high-converting, platform-tailored promotional copy for the following product:
+You are an expert affiliate marketer, e-commerce copywriter, and SEO tech blogger.
+Create platform-tailored promotional copy for the following tech product:
+
 Product Title: ${product.title}
-Price: ${product.currentPrice} (Original: ${product.originalPrice || 'N/A'}, Discount: ${product.discountPercent || 'Special Offer'})
+Platform: ${product.platform.toUpperCase()}
+Current Deal Price: ${product.currentPrice}
+Original MRP: ${product.originalPrice || 'N/A'}
+Discount: ${product.discountPercent || 'Special Discount'}
 Affiliate URL: ${product.affiliateUrl}
-Product Description: ${product.description}
+Product Overview: ${product.description}
+
+REQUIREMENTS:
+1. "bloggerTitle": An SEO-optimized review title under 70 characters with year 2026 and buyer intent (e.g. "[Product Name] Review: Is It Worth Buying in 2026?").
+2. "bloggerHtmlBody": A complete, structured 500-word SEO article in clean HTML (do not include <html> or <body> tags, only content):
+   - <div class="review-article">
+   - Introduction paragraph explaining what the product is and who it's for.
+   - <h3>🔥 Deal & Pricing Overview</h3> with comparison of deal price vs original MRP.
+   - <h3>⚙️ Key Specifications & Features</h3> with an HTML <table> (Feature | Specification).
+   - <h3>💡 Why This Product Stands Out</h3> with 3 detailed bullet points.
+   - <h3>⚖️ Pros & Cons</h3> with styled lists (<ul class="pros"> and <ul class="cons">).
+   - <h3>🏁 Final Verdict & Buyer Advice</h3>
+   - A styled CTA box: <div style="text-align:center; margin:24px 0;"><a href="${product.affiliateUrl}" style="background:#10b981; color:#ffffff; padding:14px 28px; text-decoration:none; font-size:16px; font-weight:bold; border-radius:8px; display:inline-block;" target="_blank" rel="nofollow noopener">⚡ Check Live Deal On ${product.platform.toUpperCase()} &rarr;</a></div>
+   - <p><small>*Disclaimer: Prices and availability are subject to change. As an affiliate partner, we may earn a small commission on qualifying purchases at no extra cost to you.</small></p>
+   - </div>
+3. "telegramMarkdown": Urgent, punchy Telegram deal alert using emojis (🔥, ⚡, 🛒, 🏷️), price drop callout, strikethrough original price, 3 quick feature bullets, and clean direct link:
+   🔥 *LOOT DEAL ALERT* 🔥\\n\\n*${product.title.replace(/[*_`]/g, '')}*\\n\\n💰 *Deal Price:* ${product.currentPrice} ~(${product.originalPrice || ''})~\\n📉 *Discount:* ${product.discountPercent || 'Huge Savings'}\\n\\n⚡ *Key Highlights:*\\n• High-performance segment leader\\n• Certified authentic with warranty\\n• Fast shipping available\\n\\n🛒 *Buy Now Before Deal Ends:*\\n👉 ${product.affiliateUrl}
+4. "whatsappMessage": A friendly 3-line deal alert for WhatsApp channels/groups with emojis and direct affiliate link.
+5. "tweetText": A viral X/Twitter hook under 260 characters with discount %, direct affiliate link, and hashtags (#TechDeals #${product.platform} #Deals).
 
 Return ONLY valid JSON matching this exact structure:
 {
-  "bloggerTitle": "SEO-friendly review title under 70 chars",
-  "bloggerHtmlBody": "Full 500-word SEO review in valid semantic HTML with <h2>Specifications</h2>, <h3>Why Buy This Product?</h3>, <ul>Pros and Cons</ul>, and a styled CTA button linking to affiliateUrl",
-  "telegramMarkdown": "Urgent, punchy Telegram deal alert with emojis (🔥, ⚡, 🛒), price drop callout, and direct affiliate link",
-  "whatsappMessage": "3-line conversational deal alert with affiliate link",
-  "tweetText": "Viral X/Twitter hook under 260 chars with #TechDeals hashtags and link"
+  "bloggerTitle": "string",
+  "bloggerHtmlBody": "string",
+  "telegramMarkdown": "string",
+  "whatsappMessage": "string",
+  "tweetText": "string"
 }
 `;
 
       const result = await model.generateContent(prompt);
-      const text = result.response.text();
-      const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleaned);
+      const responseText = result.response.text();
+      const parsed = GeminiAiService.extractJsonFromResponse(responseText);
 
       return {
         category: 'electronics',
-        bloggerTitle: parsed.bloggerTitle,
-        bloggerHtmlBody: parsed.bloggerHtmlBody,
-        telegramMarkdown: parsed.telegramMarkdown,
-        whatsappMessage: parsed.whatsappMessage,
-        tweetText: parsed.tweetText,
+        bloggerTitle: parsed.bloggerTitle || `${product.title} Review & Deals`,
+        bloggerHtmlBody: parsed.bloggerHtmlBody || this.generateFallbackElectronics(product).bloggerHtmlBody,
+        telegramMarkdown: parsed.telegramMarkdown || this.generateFallbackElectronics(product).telegramMarkdown,
+        whatsappMessage: parsed.whatsappMessage || this.generateFallbackElectronics(product).whatsappMessage,
+        tweetText: parsed.tweetText || this.generateFallbackElectronics(product).tweetText,
       };
     } catch {
       return this.generateFallbackElectronics(product);
@@ -66,76 +179,147 @@ Return ONLY valid JSON matching this exact structure:
     }
 
     try {
-      const model = this.client.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = this.client.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        generationConfig: {
+          temperature: 0.7,
+          topP: 0.95,
+        },
+      });
+
       const prompt = `
-You are a top Pinterest fashion strategist and menswear stylist.
-Create viral Pinterest pin copy for this men's fashion item:
-Title: ${product.title}
-Price: ${product.currentPrice} (${product.discountPercent || 'Best Deal'})
+You are a senior Pinterest fashion curator and menswear stylist.
+Create viral Pinterest pin copy and styling metadata for this men's fashion item:
+
+Product Title: ${product.title}
+Platform: ${product.platform.toUpperCase()}
+Current Price: ${product.currentPrice}
+Original Price: ${product.originalPrice || 'N/A'}
+Discount: ${product.discountPercent || 'Best Price'}
 Affiliate URL: ${product.affiliateUrl}
 
-Return ONLY valid JSON matching this structure:
+REQUIREMENTS:
+1. "pinterestTitle": Searchable, click-worthy Pin title under 60 characters tailored for Pinterest visual search (e.g., "Trending Minimalist Outfit Pick 2026 | Under ${product.currentPrice}").
+2. "pinterestDescription": 2 sentences of stylish pairing advice (what shoes/trousers/accessories to pair it with) ending with "Tap to shop the full look directly."
+3. "pinBadgeText": Punchy uppercase outfit badge for the visual banner (e.g. MUST-HAVE OUTFIT, TRENDING LOOK, OLD MONEY FIT, STREETWEAR ESSENTIAL, SMART CASUAL). Max 20 chars.
+4. "pinPriceTag": Clean formatted price string (e.g. "${product.currentPrice}").
+5. "pinterestTags": Array of 5-8 hyper-targeted Pinterest SEO hashtags (e.g. ["#MensFashion", "#OOTDMen", "#MensStyle", "#Streetwear", "#AffordableFashion"]).
+
+Return ONLY valid JSON matching this exact structure:
 {
-  "pinterestTitle": "Click-worthy Pinterest Pin Title under 60 chars",
-  "pinterestDescription": "Compelling 2-sentence styling advice including direct affiliate link callout",
-  "pinBadgeText": "Short uppercase ribbon badge (e.g., TRENDING LOOK, MUST-HAVE OUTFIT, MINIMAL STREETWEAR)",
-  "pinPriceTag": "${product.currentPrice}",
-  "pinterestTags": ["#MensFashion", "#MensStyle", "#Streetwear", "#AffordableFashion", "#OutfitInspo"]
+  "pinterestTitle": "string",
+  "pinterestDescription": "string",
+  "pinBadgeText": "string",
+  "pinPriceTag": "string",
+  "pinterestTags": ["string"]
 }
 `;
 
       const result = await model.generateContent(prompt);
-      const text = result.response.text();
-      const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleaned);
+      const responseText = result.response.text();
+      const parsed = GeminiAiService.extractJsonFromResponse(responseText);
 
       return {
         category: 'fashion',
-        pinterestTitle: parsed.pinterestTitle,
-        pinterestDescription: parsed.pinterestDescription,
-        pinBadgeText: parsed.pinBadgeText,
-        pinPriceTag: parsed.pinPriceTag,
-        pinterestTags: parsed.pinterestTags || ['#MensFashion', '#Style'],
+        pinterestTitle: parsed.pinterestTitle || `Stylist Pick: ${product.title.slice(0, 50)}`,
+        pinterestDescription: parsed.pinterestDescription || this.generateFallbackFashion(product).pinterestDescription,
+        pinBadgeText: parsed.pinBadgeText || 'MUST-HAVE LOOK',
+        pinPriceTag: parsed.pinPriceTag || product.currentPrice,
+        pinterestTags: Array.isArray(parsed.pinterestTags) && parsed.pinterestTags.length > 0
+          ? parsed.pinterestTags
+          : ['#MensFashion', '#OOTDMen', '#StreetwearLook', '#MensStyle'],
       };
     } catch {
       return this.generateFallbackFashion(product);
     }
   }
 
-  private generateFallbackElectronics(p: ProductMetadata): GeneratedContent {
+  /**
+   * Resilient offline fallback generator for Electronics & Tech deals
+   */
+  generateFallbackElectronics(p: ProductMetadata): GeneratedContent {
+    const platformName = p.platform === 'amazon' ? 'Amazon' : p.platform === 'flipkart' ? 'Flipkart' : 'Online Store';
     return {
       category: 'electronics',
-      bloggerTitle: `${p.title} Review & Deals - Is It Worth Buying?`,
+      bloggerTitle: `${p.title} Review & Lowest Price Deal (2026)`,
       bloggerHtmlBody: `
-        <article class="product-review">
-          <h2>Overview: ${p.title}</h2>
-          <p>${p.description}</p>
-          <div class="deal-highlight" style="padding:16px; background:#f0fdf4; border-radius:8px; border:1px solid #86efac; margin:16px 0;">
-            <p><strong>Current Deal Price:</strong> ${p.currentPrice} <em>(${p.discountPercent || 'Limited Time'})</em></p>
-            <a href="${p.affiliateUrl}" style="display:inline-block; padding:12px 24px; background:#10b981; color:#fff; text-decoration:none; border-radius:6px; font-weight:bold;">Grab Deal On Store &rarr;</a>
-          </div>
-          <h3>Key Features</h3>
-          <ul>
-            <li>Premium build quality and top performance</li>
-            <li>Unbeatable price-to-performance ratio in this segment</li>
-            <li>Backed by full manufacturer warranty</li>
-          </ul>
-        </article>
-      `,
-      telegramMarkdown: `🔥 *LOOT DEAL ALERT* 🔥\n\n*${p.title}*\n\n💰 *Price:* ${p.currentPrice} ~(${p.originalPrice || ''})~\n⚡ *Offer:* ${p.discountPercent || 'Mega Discount'}\n\n👇 *Buy Here With Discount:*\n${p.affiliateUrl}`,
-      whatsappMessage: `🔥 Check out this mega deal on ${p.title} for just ${p.currentPrice}! Grab it here: ${p.affiliateUrl}`,
-      tweetText: `⚡ Price drop alert! Get ${p.title} at ${p.currentPrice} (${p.discountPercent || 'Save big'})! Grab before it's gone: ${p.affiliateUrl} #Deals #Shopping`,
+<div class="pulse-review-container" style="font-family:system-ui, -apple-system, sans-serif; line-height:1.7; color:#1e293b; max-width:760px; margin:0 auto; padding:20px;">
+  <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:24px; margin-bottom:24px;">
+    <h2 style="margin-top:0; color:#0f172a; font-size:24px;">Overview: ${p.title}</h2>
+    <p style="font-size:16px; color:#475569;">${p.description}</p>
+    <div style="display:flex; flex-wrap:wrap; gap:16px; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; padding:16px; margin:20px 0; align-items:center;">
+      <div>
+        <span style="font-size:12px; text-transform:uppercase; color:#047857; font-weight:bold; letter-spacing:0.5px;">Deal Price</span>
+        <div style="font-size:26px; font-weight:800; color:#065f46;">${p.currentPrice}</div>
+      </div>
+      ${p.originalPrice ? `<div style="text-decoration:line-through; color:#94a3b8; font-size:18px;">${p.originalPrice}</div>` : ''}
+      <div style="background:#fef3c7; color:#92400e; font-weight:bold; padding:4px 10px; border-radius:6px; font-size:14px;">${p.discountPercent || 'Special Offer'}</div>
+    </div>
+    <div style="text-align:center; margin-top:20px;">
+      <a href="${p.affiliateUrl}" style="background:#10b981; color:#ffffff; padding:14px 28px; text-decoration:none; font-size:16px; font-weight:bold; border-radius:8px; display:inline-block; box-shadow:0 4px 6px -1px rgba(16, 185, 129, 0.4);" target="_blank" rel="nofollow noopener">⚡ Check Today's Deal on ${platformName} &rarr;</a>
+    </div>
+  </div>
+
+  <h3 style="color:#0f172a; border-bottom:2px solid #e2e8f0; padding-bottom:8px; font-size:20px;">⚙️ Key Specifications</h3>
+  <table style="width:100%; border-collapse:collapse; margin:16px 0;">
+    <tbody>
+      <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px; font-weight:bold; width:35%; background:#f8fafc;">Platform</td><td style="padding:10px;">${platformName}</td></tr>
+      <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px; font-weight:bold; background:#f8fafc;">Current Pricing</td><td style="padding:10px;">${p.currentPrice}</td></tr>
+      <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px; font-weight:bold; background:#f8fafc;">Discount Status</td><td style="padding:10px;">${p.discountPercent || 'Active Discount'}</td></tr>
+      <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px; font-weight:bold; background:#f8fafc;">Authenticity</td><td style="padding:10px;">100% Genuine with Official Brand Warranty</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="color:#0f172a; font-size:20px;">💡 Why You Should Buy This</h3>
+  <ul>
+    <li><strong>Top Tier Performance:</strong> Highly rated in its category for reliability and day-to-day usability.</li>
+    <li><strong>Unmatched Value:</strong> Provides features typically found in premium price brackets at an accessible price point.</li>
+    <li><strong>Hassle-Free Returns:</strong> Supported by standard platform return policy and secure payment methods.</li>
+  </ul>
+
+  <h3 style="color:#0f172a; font-size:20px;">⚖️ Pros &amp; Cons</h3>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:16px 0;">
+    <div style="background:#f0fdf4; border:1px solid #bbf7d0; padding:16px; border-radius:8px;">
+      <h4 style="color:#166534; margin-top:0;">✅ What We Like</h4>
+      <ul style="margin:0; padding-left:20px; color:#15803d;">
+        <li>High build quality &amp; design</li>
+        <li>Excellent price-to-performance ratio</li>
+        <li>Backed by brand warranty</li>
+      </ul>
+    </div>
+    <div style="background:#fef2f2; border:1px solid #fecaca; padding:16px; border-radius:8px;">
+      <h4 style="color:#991b1b; margin-top:0;">⚠️ Things to Consider</h4>
+      <ul style="margin:0; padding-left:20px; color:#b91c1c;">
+        <li>Flash deal stock is strictly limited</li>
+        <li>Prices may fluctuate dynamically</li>
+      </ul>
+    </div>
+  </div>
+
+  <div style="text-align:center; margin:32px 0;">
+    <a href="${p.affiliateUrl}" style="background:#2563eb; color:#ffffff; padding:14px 32px; text-decoration:none; font-size:16px; font-weight:bold; border-radius:8px; display:inline-block;" target="_blank" rel="nofollow noopener">👉 Buy ${p.title.slice(0, 35)} On ${platformName} Now</a>
+  </div>
+
+  <p style="font-size:12px; color:#94a3b8; border-top:1px solid #e2e8f0; padding-top:12px;">*Disclosure: As an affiliate, we earn from qualifying purchases. This helps support our reviews at no additional cost to you.</p>
+</div>
+      `.trim(),
+      telegramMarkdown: `🔥 *LOOT DEAL ALERT* 🔥\n\n*${p.title.replace(/[*_`]/g, '')}*\n\n💰 *Deal Price:* ${p.currentPrice} ${p.originalPrice ? `~(${p.originalPrice})~` : ''}\n📉 *Offer:* ${p.discountPercent || 'Limited Time'}\n\n⚡ *Highlights:*\n• Best price in this segment\n• 100% Genuine with official warranty\n• High customer rating\n\n🛒 *Grab Deal Before Price Increases:*\n👉 ${p.affiliateUrl}`,
+      whatsappMessage: `🔥 *Price Drop Alert!*\nGet *${p.title}* for just *${p.currentPrice}* (${p.discountPercent || 'Special Deal'}) on ${platformName}!\n\n👉 Grab it now: ${p.affiliateUrl}`,
+      tweetText: `⚡ Price drop alert! Get ${p.title.slice(0, 80)} for just ${p.currentPrice} (${p.discountPercent || 'Save big'}) on #${platformName}!\n\nGrab deal 👉 ${p.affiliateUrl}\n#TechDeals #Deals #Shopping`,
     };
   }
 
-  private generateFallbackFashion(p: ProductMetadata): GeneratedContent {
+  /**
+   * Resilient offline fallback generator for Men's Fashion Pins
+   */
+  generateFallbackFashion(p: ProductMetadata): GeneratedContent {
     return {
       category: 'fashion',
-      pinterestTitle: `Minimalist Men's Outfit Pick: ${p.title.slice(0, 45)}`,
-      pinterestDescription: `Upgrade your daily wardrobe with this versatile piece. Grab it now for ${p.currentPrice} before stock runs out! Direct link in pin.`,
+      pinterestTitle: `Minimalist Men's Outfit: ${p.title.slice(0, 45)}`,
+      pinterestDescription: `Elevate your everyday rotation with this versatile wardrobe staple. Pair with tailored trousers or clean sneakers for a refined aesthetic. Tap to shop the full look directly!`,
       pinBadgeText: 'TRENDING LOOK',
       pinPriceTag: p.currentPrice,
-      pinterestTags: ['#MensFashion', '#OOTDMen', '#StyleInspiration', '#StreetwearLook'],
+      pinterestTags: ['#MensFashion', '#OOTDMen', '#StyleInspiration', '#StreetwearLook', '#Menswear2026'],
     };
   }
 }
