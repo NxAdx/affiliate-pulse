@@ -271,6 +271,33 @@ export default function GeneratorScreen() {
     }
   };
 
+  const handleShareTelegramDirect = async () => {
+    if (!activeContent?.telegramMarkdown) return;
+    const text = activeContent.telegramMarkdown;
+    const telegramShareUrl = `https://t.me/share/url?url=${encodeURIComponent(
+      activeProduct?.affiliateUrl || ''
+    )}&text=${encodeURIComponent(text)}`;
+
+    try {
+      const supported = await Linking.canOpenURL(telegramShareUrl);
+      if (supported) {
+        await Linking.openURL(telegramShareUrl);
+      } else {
+        await Share.share({ message: text, title: 'Share Deal to Telegram' });
+      }
+    } catch {
+      await Share.share({ message: text, title: 'Share Deal to Telegram' });
+    }
+  };
+
+  const handleShareSystem = async (text: string, title: string = 'Affiliate Pulse Deal') => {
+    try {
+      await Share.share({ message: text, title });
+    } catch {
+      setStatusMessage('Share cancelled');
+    }
+  };
+
   const handleShareWhatsApp = () => {
     if (!activeContent?.whatsappMessage) return;
     const url = `whatsapp://send?text=${encodeURIComponent(activeContent.whatsappMessage)}`;
@@ -727,14 +754,43 @@ export default function GeneratorScreen() {
                   <Text style={styles.previewCopyText} numberOfLines={4}>
                     {activeContent.telegramMarkdown}
                   </Text>
+                  {/* Primary 1-Tap Direct Share to Telegram */}
                   <TouchableOpacity
                     style={[styles.actionBtn, { backgroundColor: theme.colors.telegram }]}
-                    onPress={handleBroadcastTelegram}
+                    onPress={handleShareTelegramDirect}
                     activeOpacity={0.85}
                   >
-                    <Ionicons name="paper-plane" size={18} color="#FFFFFF" />
-                    <Text style={styles.actionBtnText}>Broadcast to Telegram Channel</Text>
+                    <Ionicons name="share-social-outline" size={18} color="#FFFFFF" />
+                    <Text style={styles.actionBtnText}>Direct Share to Telegram</Text>
                   </TouchableOpacity>
+
+                  {/* Dual Action: Share via Any App & Optional Bot Broadcast */}
+                  <View style={[styles.dualActionRow, { marginTop: 8 }]}>
+                    <TouchableOpacity
+                      style={[styles.secondaryActionBtn, { flex: 1 }]}
+                      onPress={() =>
+                        handleShareSystem(
+                          activeContent.telegramMarkdown || '',
+                          'Telegram Deal Alert'
+                        )
+                      }
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="share-outline" size={15} color={theme.colors.telegram} />
+                      <Text style={styles.secondaryActionBtnText}>Share to Any App</Text>
+                    </TouchableOpacity>
+
+                    {settings.telegramBotToken ? (
+                      <TouchableOpacity
+                        style={[styles.secondaryActionBtn, { flex: 1 }]}
+                        onPress={handleBroadcastTelegram}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="paper-plane" size={14} color={theme.colors.telegram} />
+                        <Text style={styles.secondaryActionBtnText}>Bot Auto-Post</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
                 </View>
               )}
 
@@ -753,7 +809,7 @@ export default function GeneratorScreen() {
                   <Text style={styles.previewArticleTitle}>{activeContent.bloggerTitle}</Text>
 
                   <View style={styles.bloggerActionCol}>
-                    {/* Copy HTML Button */}
+                    {/* Primary: Copy HTML Button */}
                     <TouchableOpacity
                       style={[styles.actionBtn, { backgroundColor: theme.colors.blogger }]}
                       onPress={() =>
@@ -775,27 +831,33 @@ export default function GeneratorScreen() {
                       </Text>
                     </TouchableOpacity>
 
-                    {/* Direct API Publish Button */}
-                    <TouchableOpacity
-                      style={[styles.secondaryActionBtn, { marginTop: 8 }]}
-                      onPress={handlePublishBlogger}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="cloud-upload-outline" size={16} color={theme.colors.blogger} />
-                      <Text style={styles.secondaryActionBtnText}>Direct Publish to Blogspot (API)</Text>
-                    </TouchableOpacity>
+                    {/* Dual Action: Open Web Editor & Native Share */}
+                    <View style={[styles.dualActionRow, { marginTop: 8 }]}>
+                      <TouchableOpacity
+                        style={[styles.secondaryActionBtn, { flex: 1 }]}
+                        onPress={handleOpenBloggerEditor}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="open-outline" size={15} color={theme.colors.blogger} />
+                        <Text style={styles.secondaryActionBtnText}>Open Blogger Editor</Text>
+                      </TouchableOpacity>
 
-                    {/* Open Blogger Dashboard */}
-                    <TouchableOpacity
-                      style={[styles.secondaryActionBtn, { marginTop: 8 }]}
-                      onPress={handleOpenBloggerEditor}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="open-outline" size={16} color={theme.colors.blogger} />
-                      <Text style={styles.secondaryActionBtnText}>Open Blogger Web Dashboard</Text>
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.secondaryActionBtn, { flex: 1 }]}
+                        onPress={() =>
+                          handleShareSystem(
+                            `${activeContent.bloggerTitle}\n\n${activeContent.bloggerHtmlBody}`,
+                            'Blogspot Review Article'
+                          )
+                        }
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="share-outline" size={15} color={theme.colors.blogger} />
+                        <Text style={styles.secondaryActionBtnText}>Share to Any App</Text>
+                      </TouchableOpacity>
+                    </View>
 
-                    {/* Optional Post via Email */}
+                    {/* Optional Post via Email (Zero-OAuth) */}
                     {settings.bloggerEmail ? (
                       <TouchableOpacity
                         style={[styles.secondaryActionBtn, { marginTop: 8 }]}
@@ -804,6 +866,18 @@ export default function GeneratorScreen() {
                       >
                         <Ionicons name="mail-outline" size={16} color={theme.colors.accentDeal} />
                         <Text style={styles.secondaryActionBtnText}>Send Post via Email (Zero-OAuth)</Text>
+                      </TouchableOpacity>
+                    ) : null}
+
+                    {/* Optional Direct API Publish Button (Only if OAuth token configured) */}
+                    {settings.bloggerAccessToken ? (
+                      <TouchableOpacity
+                        style={[styles.secondaryActionBtn, { marginTop: 8 }]}
+                        onPress={handlePublishBlogger}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="cloud-upload-outline" size={16} color={theme.colors.blogger} />
+                        <Text style={styles.secondaryActionBtnText}>Direct API Publish</Text>
                       </TouchableOpacity>
                     ) : null}
                   </View>
