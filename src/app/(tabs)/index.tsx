@@ -10,6 +10,7 @@ import {
   Linking,
   Share,
   Image,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -244,6 +245,16 @@ export default function GeneratorScreen() {
 
   const handleBroadcastTelegram = async () => {
     if (!activeContent?.telegramMarkdown) return;
+
+    if (!settings.telegramBotToken?.trim() || !settings.telegramChannelId?.trim()) {
+      Alert.alert(
+        'Telegram Setup Required',
+        'Please enter and save your Telegram Bot Token and Channel ID in the Settings tab first.'
+      );
+      setStatusMessage('Telegram Bot Token or Channel ID missing in Settings');
+      return;
+    }
+
     setStatusMessage('Broadcasting to Telegram...');
     const result = await TelegramService.broadcastDeal(
       settings.telegramBotToken,
@@ -253,8 +264,10 @@ export default function GeneratorScreen() {
     );
     if (result.success) {
       setStatusMessage('Broadcast to Telegram Channel successfully!');
+      Alert.alert('Success 🎉', 'Deal alert has been broadcast to your Telegram channel!');
     } else {
       setStatusMessage(`Telegram Error: ${result.error}`);
+      Alert.alert('Telegram Error', result.error || 'Failed to broadcast to Telegram.');
     }
   };
 
