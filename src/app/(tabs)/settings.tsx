@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../../store/useAppStore';
 import { theme } from '../../theme';
 import { BloggerService } from '../../services/bloggerApi';
+import { TelegramService } from '../../services/telegramBot';
 
 interface PortalLinkProps {
   label: string;
@@ -49,6 +50,13 @@ export default function SettingsScreen() {
   const [isTestingBlogger, setIsTestingBlogger] = useState(false);
   const [bloggerTestResult, setBloggerTestResult] = useState<{
     success: boolean;
+    message: string;
+  } | null>(null);
+
+  const [isTestingTelegram, setIsTestingTelegram] = useState(false);
+  const [telegramTestResult, setTelegramTestResult] = useState<{
+    success: boolean;
+    botName?: string;
     message: string;
   } | null>(null);
 
@@ -103,6 +111,22 @@ export default function SettingsScreen() {
       });
     } finally {
       setIsTestingBlogger(false);
+    }
+  };
+
+  const handleTestTelegram = async () => {
+    setIsTestingTelegram(true);
+    setTelegramTestResult(null);
+    try {
+      const res = await TelegramService.testConnection(telegramToken, telegramChannel);
+      setTelegramTestResult(res);
+    } catch (err: any) {
+      setTelegramTestResult({
+        success: false,
+        message: err?.message || 'Error testing Telegram connection',
+      });
+    } finally {
+      setIsTestingTelegram(false);
     }
   };
 
@@ -376,6 +400,39 @@ export default function SettingsScreen() {
           </View>
           <Text style={styles.helperText}>Make sure your bot is added as an Administrator to this channel.</Text>
         </View>
+
+        {/* Test Telegram Connection Button */}
+        <TouchableOpacity
+          style={styles.testBtn}
+          onPress={handleTestTelegram}
+          disabled={isTestingTelegram}
+          activeOpacity={0.8}
+        >
+          {isTestingTelegram ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <View style={styles.testBtnInner}>
+              <Ionicons name="paper-plane" size={15} color="#FFFFFF" />
+              <Text style={styles.testBtnText}>Test Telegram Connection</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {telegramTestResult && (
+          <View
+            style={[
+              styles.testResultBox,
+              telegramTestResult.success ? styles.testResultSuccess : styles.testResultError,
+            ]}
+          >
+            <Ionicons
+              name={telegramTestResult.success ? 'checkmark-circle' : 'alert-circle'}
+              size={16}
+              color={telegramTestResult.success ? theme.colors.accentDeal : '#EF4444'}
+            />
+            <Text style={styles.testResultText}>{telegramTestResult.message}</Text>
+          </View>
+        )}
       </View>
 
       {/* SAVE BUTTON */}
