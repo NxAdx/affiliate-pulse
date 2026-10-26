@@ -1,4 +1,4 @@
-﻿export type DealCategory = 'electronics' | 'fashion' | 'general';
+export type DealCategory = 'electronics' | 'fashion' | 'general';
 
 export interface ProductMetadata {
   originalUrl: string;
@@ -8,9 +8,13 @@ export interface ProductMetadata {
   title: string;
   description: string;
   imageUrl: string;
+  galleryImages?: string[];
   currentPrice: string;
   originalPrice?: string;
   discountPercent?: string;
+  savingsAmount?: string;
+  dealScore?: string;
+  asin?: string;
   rating?: string;
   reviewsCount?: string;
   features: string[];
@@ -58,6 +62,7 @@ export interface AppSettings {
   earnkaroToken: string;
   bloggerBlogId: string;
   bloggerAccessToken: string;
+  bloggerEmail?: string;
   telegramBotToken: string;
   telegramChannelId: string;
   pinterestBoardId: string;

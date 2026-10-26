@@ -188,9 +188,22 @@ export class ProductScraper {
     const sharedTextTitle = this.extractTitleFromSharedText(inputRawText);
     const slugTitle = this.extractSlugFromUrl(canonicalUrl);
 
+    // 2. Extract Amazon ASIN if present
+    const asinMatch = canonicalUrl.match(/(?:dp|gp\/product|\/d\/)\/([A-Z0-9]{10})/i);
+    const asin = asinMatch && asinMatch[1] ? asinMatch[1] : undefined;
+
     let title = sharedTextTitle || slugTitle || 'Trending Deal Pick';
     let description = 'High quality product on massive discount with top buyer reviews.';
-    let imageUrl = 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80';
+    let imageUrl = asin
+      ? `https://images-na.ssl-images-amazon.com/images/P/${asin}.01.MAIN._SCRM_.jpg`
+      : 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80';
+    let galleryImages: string[] = asin
+      ? [
+          `https://images-na.ssl-images-amazon.com/images/P/${asin}.01.MAIN._SCRM_.jpg`,
+          `https://images-na.ssl-images-amazon.com/images/P/${asin}.02.MAIN._SCRM_.jpg`,
+          `https://images-na.ssl-images-amazon.com/images/P/${asin}.03.MAIN._SCRM_.jpg`,
+        ]
+      : [];
     let currentPrice = '₹1,499';
     let originalPrice = '₹3,999';
     let discountPercent = '62% OFF';
@@ -220,9 +233,9 @@ export class ProductScraper {
           }
         }
 
-        // Extract og:image
+        // Extract og:image if not already fetched via Amazon ASIN CDN
         const ogImage = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["'](.*?)["']/i);
-        if (ogImage && ogImage[1] && ogImage[1].startsWith('http')) {
+        if (ogImage && ogImage[1] && ogImage[1].startsWith('http') && !asin) {
           imageUrl = ogImage[1].trim();
         }
 
@@ -256,6 +269,19 @@ export class ProductScraper {
       originalPrice = '₹3,999';
     }
 
+    // Calculate Price History dealScore & savingsAmount
+    const currNum = parseInt(currentPrice.replace(/[^0-9]/g, ''), 10);
+    const origNum = parseInt(originalPrice.replace(/[^0-9]/g, ''), 10);
+    let savingsAmount: string | undefined;
+    let dealScore: string | undefined;
+    if (!isNaN(currNum) && !isNaN(origNum) && origNum > currNum) {
+      const diff = origNum - currNum;
+      savingsAmount = `Save ₹${diff.toLocaleString('en-IN')}`;
+      dealScore = `🔥 SAVE ₹${diff.toLocaleString('en-IN')} (${discountPercent})`;
+    } else {
+      dealScore = `⚡ TOP DEAL (${discountPercent})`;
+    }
+
     return {
       originalUrl: rawUrl,
       canonicalUrl,
@@ -264,9 +290,13 @@ export class ProductScraper {
       title,
       description,
       imageUrl,
+      galleryImages,
       currentPrice,
       originalPrice,
       discountPercent,
+      savingsAmount,
+      dealScore,
+      asin,
       features,
     };
   }

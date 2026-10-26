@@ -108,5 +108,12 @@ export const theme = {
       shadowRadius: 14,
       elevation: 8,
     },
+    glowDeal: {
+      shadowColor: '#10B981',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.45,
+      shadowRadius: 14,
+      elevation: 8,
+    },
   },
 };

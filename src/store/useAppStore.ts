@@ -68,6 +68,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   earnkaroToken: '',
   bloggerBlogId: '',
   bloggerAccessToken: '',
+  bloggerEmail: '',
   telegramBotToken: '',
   telegramChannelId: '',
   pinterestBoardId: '',

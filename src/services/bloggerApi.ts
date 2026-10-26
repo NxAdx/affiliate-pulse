@@ -16,6 +16,74 @@ export class BloggerService {
   }
 
   /**
+   * Tests Blogger connection and validates Blog ID and OAuth Access Token
+   */
+  static async testConnection(
+    blogId: string,
+    accessToken: string
+  ): Promise<{ success: boolean; blogName?: string; blogUrl?: string; error?: string }> {
+    if (!blogId || !blogId.trim()) {
+      return { success: false, error: 'Please enter your numeric Blogger Blog ID' };
+    }
+    if (!accessToken || !accessToken.trim()) {
+      return { success: false, error: 'Please enter your Blogger OAuth Access Token' };
+    }
+
+    const token = accessToken.trim();
+    if (token.startsWith('AIza')) {
+      return {
+        success: false,
+        error:
+          '⚠️ You entered a Google API Key instead of an OAuth 2.0 Access Token. Blogger posting requires an OAuth Bearer token (starts with "ya29..."). Tap the OAuth Playground link above to generate one.',
+      };
+    }
+
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/blogger/v3/blogs/${blogId.trim()}`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        try {
+          const errJson = JSON.parse(errorText);
+          if (errJson?.error?.code === 401) {
+            return {
+              success: false,
+              error:
+                '❌ OAuth Token Expired or Invalid (401). Please click OAuth Playground to generate a fresh token.',
+            };
+          }
+          if (errJson?.error?.code === 404) {
+            return {
+              success: false,
+              error: '❌ Blog Not Found (404). Check your numeric Blog ID in your Blogger URL.',
+            };
+          }
+          return { success: false, error: errJson?.error?.message || errorText };
+        } catch {
+          return { success: false, error: errorText };
+        }
+      }
+
+      const data = await response.json();
+      return {
+        success: true,
+        blogName: data.name,
+        blogUrl: data.url,
+      };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Network error reaching Google Blogger' };
+    }
+  }
+
+  /**
    * Publishes formatted HTML review to Google Blogger via API v3
    */
   static async publishPost(
@@ -31,13 +99,22 @@ export class BloggerService {
       };
     }
 
+    const token = accessToken.trim();
+    if (token.startsWith('AIza')) {
+      return {
+        success: false,
+        error:
+          '⚠️ You entered a Google API Key instead of an OAuth token. Blogger API rejects API keys for writing posts. Use "Copy HTML" to paste directly, or get an OAuth token via OAuth Playground.',
+      };
+    }
+
     try {
       const response = await fetch(
         `https://www.googleapis.com/blogger/v3/blogs/${blogId.trim()}/posts/`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${accessToken.trim()}`,
+            Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({

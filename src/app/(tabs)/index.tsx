@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Linking,
   Share,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -32,7 +33,11 @@ export default function GeneratorScreen() {
   const [customPrice, setCustomPrice] = useState('');
   const [customMrp, setCustomMrp] = useState('');
   const [customDiscount, setCustomDiscount] = useState('');
+  const [customImageUrl, setCustomImageUrl] = useState('');
   const [isTuningVisible, setIsTuningVisible] = useState(false);
+
+  // Active channel view filter (Buffer / Publer inspiration)
+  const [activeChannelTab, setActiveChannelTab] = useState<'all' | 'whatsapp' | 'telegram' | 'blogger' | 'x'>('all');
 
   const pinCardRef = useRef<View>(null);
 
@@ -75,10 +80,10 @@ export default function GeneratorScreen() {
     }
 
     setIsProcessing(true);
-    setStatusMessage('Resolving link & extracting metadata...');
+    setStatusMessage('Resolving link & fetching real product image/pricing...');
 
     try {
-      // 1. Scrape & resolve URL
+      // 1. Scrape & resolve URL (uses official Amazon CDN for real product image)
       const product = await ProductScraper.parseProductUrl(inputUrl.trim(), {
         amazon: settings.amazonAffiliateTag,
         flipkart: settings.flipkartAffiliateTag,
@@ -90,10 +95,11 @@ export default function GeneratorScreen() {
       setCustomPrice(product.currentPrice);
       setCustomMrp(product.originalPrice || '₹3,999');
       setCustomDiscount(product.discountPercent || '50% OFF');
+      setCustomImageUrl(product.imageUrl);
       setActiveProduct(product);
 
-      // 2. Feed into Gemini AI
-      setStatusMessage('Generating multi-channel copy...');
+      // 2. Feed into Gemini AI for lengthy 1200+ word review and viral deal copy
+      setStatusMessage('Gemini AI generating 1200+ word review & channel copy...');
       const gemini = new GeminiAiService(settings.geminiApiKey);
 
       let content;
@@ -114,7 +120,7 @@ export default function GeneratorScreen() {
         status: {},
       });
 
-      setStatusMessage('Deal generated successfully!');
+      setStatusMessage('Deal generated successfully with real product imagery!');
     } catch (err: any) {
       setStatusMessage(`Error: ${err?.message || 'Failed to process product'}`);
     } finally {
@@ -122,13 +128,14 @@ export default function GeneratorScreen() {
     }
   };
 
-  // Re-sync copy when user customizes price or title in UI
+  // Re-sync copy when user customizes price, image or title in UI
   const handleApplyCustomTuning = () => {
     if (!activeProduct) return;
 
     const updatedProduct = {
       ...activeProduct,
       title: customTitle.trim() || activeProduct.title,
+      imageUrl: customImageUrl.trim() || activeProduct.imageUrl,
       currentPrice: customPrice.trim().startsWith('₹') ? customPrice.trim() : `₹${customPrice.trim()}`,
       originalPrice: customMrp.trim().startsWith('₹') ? customMrp.trim() : `₹${customMrp.trim()}`,
       discountPercent: customDiscount.trim() || activeProduct.discountPercent,
@@ -136,7 +143,7 @@ export default function GeneratorScreen() {
 
     setActiveProduct(updatedProduct);
 
-    // Update activeContent with new prices & title
+    // Update activeContent with new image, prices & title
     if (activeContent) {
       const gemini = new GeminiAiService(settings.geminiApiKey);
       if (selectedCategory === 'electronics') {
@@ -159,7 +166,7 @@ export default function GeneratorScreen() {
       }
     }
 
-    setStatusMessage('Updated deal prices & headlines across all channels!');
+    setStatusMessage('Updated real product image & pricing across all channels!');
   };
 
   // Pinterest 2:3 Pin Export via react-native-view-shot & expo-sharing
@@ -225,6 +232,16 @@ export default function GeneratorScreen() {
     Linking.openURL(url);
   };
 
+  const handlePublishViaEmail = () => {
+    if (!settings.bloggerEmail || !activeContent?.bloggerHtmlBody) return;
+    const mailto = `mailto:${settings.bloggerEmail}?subject=${encodeURIComponent(
+      activeContent.bloggerTitle || 'Product Review'
+    )}&body=${encodeURIComponent(activeContent.bloggerHtmlBody)}`;
+    Linking.openURL(mailto).catch(() => {
+      setStatusMessage('Could not launch email client');
+    });
+  };
+
   const handleBroadcastTelegram = async () => {
     if (!activeContent?.telegramMarkdown) return;
     setStatusMessage('Broadcasting to Telegram...');
@@ -232,7 +249,7 @@ export default function GeneratorScreen() {
       settings.telegramBotToken,
       settings.telegramChannelId,
       activeContent.telegramMarkdown,
-      activeProduct?.imageUrl
+      customImageUrl || activeProduct?.imageUrl
     );
     if (result.success) {
       setStatusMessage('Broadcast to Telegram Channel successfully!');
@@ -377,7 +394,7 @@ export default function GeneratorScreen() {
         </View>
       ) : null}
 
-      {/* Interactive Deal Customizer / Price Tuning Box */}
+      {/* Interactive Deal Customizer / Live Price & Image Tuning Box */}
       {activeProduct && (
         <View style={styles.tuningCard}>
           <TouchableOpacity
@@ -387,7 +404,7 @@ export default function GeneratorScreen() {
           >
             <View style={styles.tuningHeaderTitleRow}>
               <Ionicons name="options-outline" size={16} color={theme.colors.accentDeal} />
-              <Text style={styles.tuningTitle}>Deal Details & Live Price Tuning</Text>
+              <Text style={styles.tuningTitle}>Deal Details, Image & Price Tuning</Text>
             </View>
             <Ionicons
               name={isTuningVisible ? 'chevron-up' : 'chevron-down'}
@@ -398,6 +415,7 @@ export default function GeneratorScreen() {
 
           {isTuningVisible && (
             <View style={styles.tuningBody}>
+              {/* Product Title */}
               <View style={styles.tuneField}>
                 <Text style={styles.tuneLabel}>Product Title</Text>
                 <TextInput
@@ -409,6 +427,30 @@ export default function GeneratorScreen() {
                 />
               </View>
 
+              {/* Product Image URL with Live Thumbnail */}
+              <View style={styles.tuneField}>
+                <Text style={styles.tuneLabel}>Product Image URL</Text>
+                <View style={styles.imageTuneRow}>
+                  {customImageUrl ? (
+                    <Image
+                      source={{ uri: customImageUrl }}
+                      style={styles.tuneThumb}
+                      resizeMode="contain"
+                    />
+                  ) : null}
+                  <TextInput
+                    style={[styles.tuneInput, { flex: 1 }]}
+                    value={customImageUrl}
+                    onChangeText={setCustomImageUrl}
+                    placeholder="https://images... (Auto-fetched from CDN)"
+                    placeholderTextColor={theme.colors.textMuted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+
+              {/* Price Row */}
               <View style={styles.tuneRow}>
                 <View style={styles.tuneCol}>
                   <Text style={styles.tuneLabel}>Deal Price</Text>
@@ -457,6 +499,14 @@ export default function GeneratorScreen() {
         </View>
       )}
 
+      {/* Price History / Deal Quality Banner */}
+      {activeProduct?.dealScore && (
+        <View style={styles.dealScoreBanner}>
+          <Ionicons name="flame" size={16} color="#EF4444" />
+          <Text style={styles.dealScoreText}>{activeProduct.dealScore}</Text>
+        </View>
+      )}
+
       {/* Live Preview Area */}
       {activeContent && (
         <View style={styles.previewContainer}>
@@ -467,7 +517,7 @@ export default function GeneratorScreen() {
                 <Text style={styles.previewHeading}>Pinterest 2:3 Pin Studio</Text>
               </View>
 
-              {/* Pin Graphic Component (Captured via view-shot) */}
+              {/* Pin Graphic Component (Captured via view-shot with real product image) */}
               <View style={styles.pinCenterWrap}>
                 <PinCardView
                   ref={pinCardRef}
@@ -476,7 +526,7 @@ export default function GeneratorScreen() {
                   priceTag={customPrice || activeContent.pinPriceTag || activeProduct?.currentPrice || '₹1,499'}
                   originalPrice={customMrp || activeProduct?.originalPrice}
                   discountPercent={customDiscount || activeProduct?.discountPercent}
-                  imageUrl={activeProduct?.imageUrl || ''}
+                  imageUrl={customImageUrl || activeProduct?.imageUrl || ''}
                   platform={activeProduct?.platform}
                 />
               </View>
@@ -557,160 +607,236 @@ export default function GeneratorScreen() {
                 <Text style={styles.previewHeading}>Multi-Channel Syndication Ready</Text>
               </View>
 
+              {/* Buffer / Publer Channel Switcher Tabs */}
+              <View style={styles.channelTabBar}>
+                <TouchableOpacity
+                  style={[styles.channelTab, activeChannelTab === 'all' && styles.channelTabActive]}
+                  onPress={() => setActiveChannelTab('all')}
+                >
+                  <Text style={[styles.channelTabText, activeChannelTab === 'all' && styles.channelTabTextActive]}>
+                    All
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.channelTab, activeChannelTab === 'whatsapp' && styles.channelTabActive]}
+                  onPress={() => setActiveChannelTab('whatsapp')}
+                >
+                  <Ionicons name="logo-whatsapp" size={12} color={theme.colors.whatsapp} />
+                  <Text style={[styles.channelTabText, activeChannelTab === 'whatsapp' && styles.channelTabTextActive]}>
+                    WhatsApp
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.channelTab, activeChannelTab === 'telegram' && styles.channelTabActive]}
+                  onPress={() => setActiveChannelTab('telegram')}
+                >
+                  <Ionicons name="paper-plane" size={12} color={theme.colors.telegram} />
+                  <Text style={[styles.channelTabText, activeChannelTab === 'telegram' && styles.channelTabTextActive]}>
+                    Telegram
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.channelTab, activeChannelTab === 'blogger' && styles.channelTabActive]}
+                  onPress={() => setActiveChannelTab('blogger')}
+                >
+                  <Ionicons name="newspaper" size={12} color={theme.colors.blogger} />
+                  <Text style={[styles.channelTabText, activeChannelTab === 'blogger' && styles.channelTabTextActive]}>
+                    Blogspot
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.channelTab, activeChannelTab === 'x' && styles.channelTabActive]}
+                  onPress={() => setActiveChannelTab('x')}
+                >
+                  <Ionicons name="logo-twitter" size={12} color={theme.colors.primaryLight} />
+                  <Text style={[styles.channelTabText, activeChannelTab === 'x' && styles.channelTabTextActive]}>
+                    X
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
               {/* Card 1: WhatsApp Channel Alert */}
-              <View style={styles.channelCard}>
-                <View style={styles.channelCardHeader}>
-                  <View style={styles.channelTitleRow}>
-                    <Ionicons name="logo-whatsapp" size={18} color={theme.colors.whatsapp} />
-                    <Text style={styles.channelTitle}>WhatsApp Channel Message</Text>
+              {(activeChannelTab === 'all' || activeChannelTab === 'whatsapp') && (
+                <View style={styles.channelCard}>
+                  <View style={styles.channelCardHeader}>
+                    <View style={styles.channelTitleRow}>
+                      <Ionicons name="logo-whatsapp" size={18} color={theme.colors.whatsapp} />
+                      <Text style={styles.channelTitle}>WhatsApp Channel Message</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.copySmallBtn}
+                      onPress={() => handleCopyText(activeContent.whatsappMessage || '', 'whatsapp')}
+                    >
+                      <Ionicons
+                        name={copiedKey === 'whatsapp' ? 'checkmark' : 'copy-outline'}
+                        size={13}
+                        color={theme.colors.primaryLight}
+                      />
+                      <Text style={styles.copySmallBtnText}>
+                        {copiedKey === 'whatsapp' ? 'Copied' : 'Copy'}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
+                  <Text style={styles.previewCopyText}>{activeContent.whatsappMessage}</Text>
                   <TouchableOpacity
-                    style={styles.copySmallBtn}
-                    onPress={() => handleCopyText(activeContent.whatsappMessage || '', 'whatsapp')}
-                  >
-                    <Ionicons
-                      name={copiedKey === 'whatsapp' ? 'checkmark' : 'copy-outline'}
-                      size={13}
-                      color={theme.colors.primaryLight}
-                    />
-                    <Text style={styles.copySmallBtnText}>
-                      {copiedKey === 'whatsapp' ? 'Copied' : 'Copy'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.previewCopyText}>{activeContent.whatsappMessage}</Text>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: theme.colors.whatsapp }]}
-                  onPress={handleShareWhatsApp}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="share-social-outline" size={18} color="#FFFFFF" />
-                  <Text style={styles.actionBtnText}>Share to WhatsApp</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Card 2: Telegram Deal Channel */}
-              <View style={styles.channelCard}>
-                <View style={styles.channelCardHeader}>
-                  <View style={styles.channelTitleRow}>
-                    <Ionicons name="paper-plane-outline" size={18} color={theme.colors.telegram} />
-                    <Text style={styles.channelTitle}>Telegram Channel Alert</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.copySmallBtn}
-                    onPress={() => handleCopyText(activeContent.telegramMarkdown || '', 'telegram')}
-                  >
-                    <Ionicons
-                      name={copiedKey === 'telegram' ? 'checkmark' : 'copy-outline'}
-                      size={13}
-                      color={theme.colors.primaryLight}
-                    />
-                    <Text style={styles.copySmallBtnText}>
-                      {copiedKey === 'telegram' ? 'Copied' : 'Copy'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.previewCopyText} numberOfLines={4}>
-                  {activeContent.telegramMarkdown}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: theme.colors.telegram }]}
-                  onPress={handleBroadcastTelegram}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="paper-plane" size={18} color="#FFFFFF" />
-                  <Text style={styles.actionBtnText}>Broadcast to Telegram Channel</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Card 3: Google Blogger (Blogspot) */}
-              <View style={styles.channelCard}>
-                <View style={styles.channelCardHeader}>
-                  <View style={styles.channelTitleRow}>
-                    <Ionicons name="newspaper-outline" size={18} color={theme.colors.blogger} />
-                    <Text style={styles.channelTitle}>SEO 500-Word Article</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.copySmallBtn}
-                    onPress={() =>
-                      handleCopyText(
-                        activeContent.bloggerHtmlBody || '',
-                        'bloggerHtml',
-                        'Blogger HTML copied to clipboard!'
-                      )
-                    }
-                  >
-                    <Ionicons
-                      name={copiedKey === 'bloggerHtml' ? 'checkmark' : 'copy-outline'}
-                      size={13}
-                      color={theme.colors.primaryLight}
-                    />
-                    <Text style={styles.copySmallBtnText}>
-                      {copiedKey === 'bloggerHtml' ? 'Copied HTML' : 'Copy HTML'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.previewArticleTitle}>{activeContent.bloggerTitle}</Text>
-
-                <View style={styles.bloggerActionCol}>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: theme.colors.blogger }]}
-                    onPress={handlePublishBlogger}
+                    style={[styles.actionBtn, { backgroundColor: theme.colors.whatsapp }]}
+                    onPress={handleShareWhatsApp}
                     activeOpacity={0.85}
                   >
-                    <Ionicons name="cloud-upload-outline" size={18} color="#FFFFFF" />
-                    <Text style={styles.actionBtnText}>Publish via API (One-Tap)</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.secondaryActionBtn, { marginTop: 8 }]}
-                    onPress={handleOpenBloggerEditor}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="open-outline" size={16} color={theme.colors.blogger} />
-                    <Text style={styles.secondaryActionBtnText}>Open Blogger Web Dashboard</Text>
+                    <Ionicons name="share-social-outline" size={18} color="#FFFFFF" />
+                    <Text style={styles.actionBtnText}>Share to WhatsApp</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              )}
+
+              {/* Card 2: Telegram Deal Channel */}
+              {(activeChannelTab === 'all' || activeChannelTab === 'telegram') && (
+                <View style={styles.channelCard}>
+                  <View style={styles.channelCardHeader}>
+                    <View style={styles.channelTitleRow}>
+                      <Ionicons name="paper-plane-outline" size={18} color={theme.colors.telegram} />
+                      <Text style={styles.channelTitle}>Telegram Channel Alert</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.copySmallBtn}
+                      onPress={() => handleCopyText(activeContent.telegramMarkdown || '', 'telegram')}
+                    >
+                      <Ionicons
+                        name={copiedKey === 'telegram' ? 'checkmark' : 'copy-outline'}
+                        size={13}
+                        color={theme.colors.primaryLight}
+                      />
+                      <Text style={styles.copySmallBtnText}>
+                        {copiedKey === 'telegram' ? 'Copied' : 'Copy'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.previewCopyText} numberOfLines={4}>
+                    {activeContent.telegramMarkdown}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: theme.colors.telegram }]}
+                    onPress={handleBroadcastTelegram}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="paper-plane" size={18} color="#FFFFFF" />
+                    <Text style={styles.actionBtnText}>Broadcast to Telegram Channel</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Card 3: Google Blogger (Blogspot) */}
+              {(activeChannelTab === 'all' || activeChannelTab === 'blogger') && (
+                <View style={styles.channelCard}>
+                  <View style={styles.channelCardHeader}>
+                    <View style={styles.channelTitleRow}>
+                      <Ionicons name="newspaper-outline" size={18} color={theme.colors.blogger} />
+                      <Text style={styles.channelTitle}>1200+ Word SEO Review Article</Text>
+                    </View>
+                    <View style={styles.badgePill}>
+                      <Text style={styles.badgePillText}>HTML + IMAGES</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.previewArticleTitle}>{activeContent.bloggerTitle}</Text>
+
+                  <View style={styles.bloggerActionCol}>
+                    {/* Copy HTML Button */}
+                    <TouchableOpacity
+                      style={[styles.actionBtn, { backgroundColor: theme.colors.blogger }]}
+                      onPress={() =>
+                        handleCopyText(
+                          activeContent.bloggerHtmlBody || '',
+                          'bloggerHtml',
+                          'Complete SEO Review HTML copied to clipboard!'
+                        )
+                      }
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons
+                        name={copiedKey === 'bloggerHtml' ? 'checkmark' : 'copy-outline'}
+                        size={18}
+                        color="#FFFFFF"
+                      />
+                      <Text style={styles.actionBtnText}>
+                        {copiedKey === 'bloggerHtml' ? 'HTML Copied to Clipboard!' : 'Copy SEO Article (HTML)'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Direct API Publish Button */}
+                    <TouchableOpacity
+                      style={[styles.secondaryActionBtn, { marginTop: 8 }]}
+                      onPress={handlePublishBlogger}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="cloud-upload-outline" size={16} color={theme.colors.blogger} />
+                      <Text style={styles.secondaryActionBtnText}>Direct Publish to Blogspot (API)</Text>
+                    </TouchableOpacity>
+
+                    {/* Open Blogger Dashboard */}
+                    <TouchableOpacity
+                      style={[styles.secondaryActionBtn, { marginTop: 8 }]}
+                      onPress={handleOpenBloggerEditor}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="open-outline" size={16} color={theme.colors.blogger} />
+                      <Text style={styles.secondaryActionBtnText}>Open Blogger Web Dashboard</Text>
+                    </TouchableOpacity>
+
+                    {/* Optional Post via Email */}
+                    {settings.bloggerEmail ? (
+                      <TouchableOpacity
+                        style={[styles.secondaryActionBtn, { marginTop: 8 }]}
+                        onPress={handlePublishViaEmail}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="mail-outline" size={16} color={theme.colors.accentDeal} />
+                        <Text style={styles.secondaryActionBtnText}>Send Post via Email (Zero-OAuth)</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                </View>
+              )}
 
               {/* Card 4: X / Twitter */}
-              <View style={styles.channelCard}>
-                <View style={styles.channelCardHeader}>
-                  <View style={styles.channelTitleRow}>
-                    <Ionicons name="logo-twitter" size={18} color={theme.colors.primaryLight} />
-                    <Text style={styles.channelTitle}>X (Twitter) Deal Hook</Text>
+              {(activeChannelTab === 'all' || activeChannelTab === 'x') && (
+                <View style={styles.channelCard}>
+                  <View style={styles.channelCardHeader}>
+                    <View style={styles.channelTitleRow}>
+                      <Ionicons name="logo-twitter" size={18} color={theme.colors.primaryLight} />
+                      <Text style={styles.channelTitle}>X (Twitter) Deal Hook</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.copySmallBtn}
+                      onPress={() => handleCopyText(activeContent.tweetText || '', 'xText')}
+                    >
+                      <Ionicons
+                        name={copiedKey === 'xText' ? 'checkmark' : 'copy-outline'}
+                        size={13}
+                        color={theme.colors.primaryLight}
+                      />
+                      <Text style={styles.copySmallBtnText}>
+                        {copiedKey === 'xText' ? 'Copied' : 'Copy'}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
+                  <Text style={styles.previewCopyText}>{activeContent.tweetText}</Text>
                   <TouchableOpacity
-                    style={styles.copySmallBtn}
-                    onPress={() => handleCopyText(activeContent.tweetText || '', 'xText')}
+                    style={[
+                      styles.actionBtn,
+                      {
+                        backgroundColor: '#1E293B',
+                        borderWidth: 1,
+                        borderColor: theme.colors.borderSubtle,
+                      },
+                    ]}
+                    onPress={handleShareX}
+                    activeOpacity={0.85}
                   >
-                    <Ionicons
-                      name={copiedKey === 'xText' ? 'checkmark' : 'copy-outline'}
-                      size={13}
-                      color={theme.colors.primaryLight}
-                    />
-                    <Text style={styles.copySmallBtnText}>
-                      {copiedKey === 'xText' ? 'Copied' : 'Copy'}
-                    </Text>
+                    <Ionicons name="logo-twitter" size={18} color="#FFFFFF" />
+                    <Text style={styles.actionBtnText}>Post to X</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.previewCopyText}>{activeContent.tweetText}</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.actionBtn,
-                    {
-                      backgroundColor: '#1E293B',
-                      borderWidth: 1,
-                      borderColor: theme.colors.borderSubtle,
-                    },
-                  ]}
-                  onPress={handleShareX}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="logo-twitter" size={18} color="#FFFFFF" />
-                  <Text style={styles.actionBtnText}>Post to X</Text>
-                </TouchableOpacity>
-              </View>
+              )}
             </View>
           )}
         </View>
@@ -905,7 +1031,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.25)',
     padding: 14,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   tuningHeader: {
     flexDirection: 'row',
@@ -948,6 +1074,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: theme.typography.sizes.xs,
   },
+  imageTuneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tuneThumb: {
+    width: 38,
+    height: 38,
+    borderRadius: theme.radii.xs,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+  },
   tuneRow: {
     flexDirection: 'row',
     gap: 8,
@@ -969,6 +1108,24 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.sizes.xs,
     fontWeight: '700',
+  },
+  dealScoreBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: theme.radii.md,
+    marginBottom: 14,
+  },
+  dealScoreText: {
+    color: '#F87171',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   previewContainer: {
     marginTop: 4,
@@ -1043,6 +1200,36 @@ const styles = StyleSheet.create({
   electronicsPreview: {
     gap: 14,
   },
+  channelTabBar: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 6,
+    flexWrap: 'wrap',
+  },
+  channelTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: theme.radii.full,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+  },
+  channelTabActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primaryLight,
+  },
+  channelTabText: {
+    color: theme.colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  channelTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
   channelCard: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radii.lg,
@@ -1066,6 +1253,18 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     fontSize: theme.typography.sizes.sm,
     fontWeight: '700',
+  },
+  badgePill: {
+    backgroundColor: theme.colors.primaryGlow,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: theme.radii.xs,
+  },
+  badgePillText: {
+    color: theme.colors.primaryLight,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   copySmallBtn: {
     flexDirection: 'row',
