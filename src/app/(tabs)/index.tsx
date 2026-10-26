@@ -754,18 +754,27 @@ export default function GeneratorScreen() {
                   <Text style={styles.previewCopyText} numberOfLines={4}>
                     {activeContent.telegramMarkdown}
                   </Text>
-                  {/* Primary 1-Tap Direct Share to Telegram */}
+                  {/* Primary: Broadcast to Telegram Channel (Bot API) */}
                   <TouchableOpacity
                     style={[styles.actionBtn, { backgroundColor: theme.colors.telegram }]}
-                    onPress={handleShareTelegramDirect}
+                    onPress={handleBroadcastTelegram}
                     activeOpacity={0.85}
                   >
-                    <Ionicons name="share-social-outline" size={18} color="#FFFFFF" />
-                    <Text style={styles.actionBtnText}>Direct Share to Telegram</Text>
+                    <Ionicons name="paper-plane" size={18} color="#FFFFFF" />
+                    <Text style={styles.actionBtnText}>Broadcast to Telegram Channel</Text>
                   </TouchableOpacity>
 
-                  {/* Dual Action: Share via Any App & Optional Bot Broadcast */}
+                  {/* Dual Action: Direct Share to Telegram App & Any App */}
                   <View style={[styles.dualActionRow, { marginTop: 8 }]}>
+                    <TouchableOpacity
+                      style={[styles.secondaryActionBtn, { flex: 1 }]}
+                      onPress={handleShareTelegramDirect}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="share-social-outline" size={15} color={theme.colors.telegram} />
+                      <Text style={styles.secondaryActionBtnText}>Direct Share App</Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity
                       style={[styles.secondaryActionBtn, { flex: 1 }]}
                       onPress={() =>
@@ -779,17 +788,6 @@ export default function GeneratorScreen() {
                       <Ionicons name="share-outline" size={15} color={theme.colors.telegram} />
                       <Text style={styles.secondaryActionBtnText}>Share to Any App</Text>
                     </TouchableOpacity>
-
-                    {settings.telegramBotToken ? (
-                      <TouchableOpacity
-                        style={[styles.secondaryActionBtn, { flex: 1 }]}
-                        onPress={handleBroadcastTelegram}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="paper-plane" size={14} color={theme.colors.telegram} />
-                        <Text style={styles.secondaryActionBtnText}>Bot Auto-Post</Text>
-                      </TouchableOpacity>
-                    ) : null}
                   </View>
                 </View>
               )}
