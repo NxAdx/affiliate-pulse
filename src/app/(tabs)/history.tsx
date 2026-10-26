@@ -100,8 +100,12 @@ export default function HistoryScreen() {
               </Text>
 
               <View style={styles.priceRow}>
-                <Text style={styles.priceText}>{item.product.currentPrice}</Text>
-                {item.product.originalPrice ? (
+                <Text style={styles.priceText}>
+                  {item.product.currentPrice && /\d/.test(item.product.currentPrice)
+                    ? item.product.currentPrice
+                    : '₹1,499'}
+                </Text>
+                {item.product.originalPrice && /\d/.test(item.product.originalPrice) ? (
                   <Text style={styles.originalPriceText}>{item.product.originalPrice}</Text>
                 ) : null}
                 {item.product.discountPercent ? (

@@ -1,4 +1,4 @@
-﻿import { ProductMetadata } from '../types';
+import { ProductMetadata } from '../types';
 
 export class ProductScraper {
   /**
@@ -10,6 +10,95 @@ export class ProductScraper {
     const trimmed = rawText.trim();
     const urlMatch = trimmed.match(/(https?:\/\/[^\s]+)/i);
     return urlMatch ? urlMatch[1] : trimmed;
+  }
+
+  /**
+   * Extracts product title from conversational shared text if present
+   * E.g. "Check this out on Amazon! boAt Rockerz 450 Bluetooth On Ear Headphones: https://amzn.to/3xyz"
+   * -> "boAt Rockerz 450 Bluetooth On Ear Headphones"
+   */
+  static extractTitleFromSharedText(rawText: string): string | null {
+    if (!rawText) return null;
+    const cleanUrl = this.extractUrlFromText(rawText);
+    let titlePart = rawText.replace(cleanUrl, '').trim();
+
+    // Remove common sharing boilerplate prefixes & suffixes
+    titlePart = titlePart
+      .replace(/^check\s+this\s+out\s+(?:on\s+amazon!?|on\s+flipkart!?|on\s+myntra!?|here!?)\s*[:\-–]?\s*/i, '')
+      .replace(/^take\s+a\s+look\s+at\s+this\s*/i, '')
+      .replace(/^deal\s+alert\s*[:\-–]?\s*/i, '')
+      .replace(/\s*on\s+(?:amazon|flipkart|myntra)\s*$/i, '')
+      .replace(/^[:\-–\s]+|[:\-–\s]+$/g, '')
+      .trim();
+
+    return titlePart.length >= 5 ? titlePart : null;
+  }
+
+  /**
+   * Extracts clean product title from URL path slug
+   * E.g. https://www.amazon.in/boAt-Rockerz-450-Bluetooth-Headphones/dp/B07HGJK535
+   * -> "boAt Rockerz 450 Bluetooth Headphones"
+   * E.g. https://www.flipkart.com/apple-iphone-15-black-128-gb/p/itm...
+   * -> "Apple Iphone 15 Black 128 Gb"
+   */
+  static extractSlugFromUrl(url: string): string | null {
+    try {
+      const parsed = new URL(url);
+      const pathname = parsed.pathname;
+
+      // Amazon pattern: /product-title-slug/dp/ASIN or /gp/product/ASIN
+      const amazonSlug = pathname.match(/^\/([^\/]+)\/(?:dp|gp\/product|\/d\/)/i);
+      if (amazonSlug && amazonSlug[1] && amazonSlug[1] !== 'dp' && amazonSlug[1] !== 'gp') {
+        return this.formatSlugToTitle(amazonSlug[1]);
+      }
+
+      // Flipkart pattern: /product-title-slug/p/itm...
+      const flipkartSlug = pathname.match(/^\/([^\/]+)\/p\//i);
+      if (flipkartSlug && flipkartSlug[1]) {
+        return this.formatSlugToTitle(flipkartSlug[1]);
+      }
+
+      // Myntra pattern: /category/brand/product-title-slug/id/buy
+      const myntraSlug = pathname.match(/\/([^\/]+)\/\d+\/buy/i);
+      if (myntraSlug && myntraSlug[1]) {
+        return this.formatSlugToTitle(myntraSlug[1]);
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Converts kebab-case/hyphenated URL slug into readable Title
+   */
+  static formatSlugToTitle(slug: string): string {
+    return slug
+      .split(/[-_]+/)
+      .filter((w) => w.length > 0 && !/^(dp|gp|itm|p|ref)$/i.test(w))
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ')
+      .trim();
+  }
+
+  /**
+   * Validates and normalizes price strings to prevent "₹," or invalid formatting
+   */
+  static extractPrice(htmlOrText: string): string | null {
+    if (!htmlOrText) return null;
+    // Strict pattern: requires at least 2 digits (e.g. ₹99, ₹1,499, ₹24,999, Rs. 499)
+    const match = htmlOrText.match(
+      /(?:₹|Rs\.?|INR)\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]{2,})/i
+    );
+    if (match && match[1]) {
+      const val = match[1].trim();
+      const digitsOnly = val.replace(/[^0-9]/g, '');
+      if (digitsOnly.length >= 2) {
+        return `₹${val}`;
+      }
+    }
+    return null;
   }
 
   /**
@@ -47,9 +136,6 @@ export class ProductScraper {
 
   /**
    * Cleans URL and injects user affiliate tracking tag
-   * - Amazon: Extracts 10-char ASIN, strips tracking clutter, returns clean canonical URL
-   * - Flipkart: Injects affid and tracking parameter
-   * - Other: Wraps with EarnKaro/Cuelinks prefix if available
    */
   static injectAffiliateTag(
     url: string,
@@ -98,12 +184,16 @@ export class ProductScraper {
     const platform = this.detectPlatform(canonicalUrl);
     const affiliateUrl = this.injectAffiliateTag(canonicalUrl, platform, tags);
 
-    let title = 'Deal Product';
-    let description = 'High quality product on massive discount.';
+    // 1. Check title from shared text or URL slug
+    const sharedTextTitle = this.extractTitleFromSharedText(inputRawText);
+    const slugTitle = this.extractSlugFromUrl(canonicalUrl);
+
+    let title = sharedTextTitle || slugTitle || 'Trending Deal Pick';
+    let description = 'High quality product on massive discount with top buyer reviews.';
     let imageUrl = 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80';
-    let currentPrice = '₹1,999';
-    let originalPrice = '₹4,999';
-    let discountPercent = '60% OFF';
+    let currentPrice = '₹1,499';
+    let originalPrice = '₹3,999';
+    let discountPercent = '62% OFF';
     const features: string[] = [];
 
     try {
@@ -119,26 +209,36 @@ export class ProductScraper {
         const html = await res.text();
 
         // Extract og:title
-        const ogTitle = html.match(/<meta\s+property=["']og:title["']\s+content=["'](.*?)["']/i);
-        if (ogTitle && ogTitle[1]) {
+        const ogTitle = html.match(/<meta\s+(?:property|name)=["']og:title["']\s+content=["'](.*?)["']/i);
+        if (ogTitle && ogTitle[1] && ogTitle[1].trim().length > 3 && !ogTitle[1].includes('validateCaptcha')) {
           title = ogTitle[1].replace(/Amazon\.in\s*:?|Flipkart\.com\s*:?/gi, '').trim();
+        } else if (title === 'Trending Deal Pick') {
+          // Try regular HTML <title> tag
+          const htmlTitle = html.match(/<title>([^<]+)<\/title>/i);
+          if (htmlTitle && htmlTitle[1] && !htmlTitle[1].includes('Captcha') && !htmlTitle[1].includes('Robot')) {
+            title = htmlTitle[1].replace(/Amazon\.in\s*:?|Flipkart\.com\s*:?/gi, '').trim();
+          }
         }
 
         // Extract og:image
-        const ogImage = html.match(/<meta\s+property=["']og:image["']\s+content=["'](.*?)["']/i);
-        if (ogImage && ogImage[1]) imageUrl = ogImage[1].trim();
-
-        // Extract og:description
-        const ogDesc = html.match(/<meta\s+property=["']og:description["']\s+content=["'](.*?)["']/i);
-        if (ogDesc && ogDesc[1]) description = ogDesc[1].trim();
-
-        // Regex for Price detection (Indian e-commerce pattern: ₹XX,XXX or Rs. XX,XXX)
-        const priceMatch = html.match(/(?:₹|Rs\.?|INR)\s*([\d,]+)/i);
-        if (priceMatch && priceMatch[1]) {
-          currentPrice = `₹${priceMatch[1]}`;
+        const ogImage = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["'](.*?)["']/i);
+        if (ogImage && ogImage[1] && ogImage[1].startsWith('http')) {
+          imageUrl = ogImage[1].trim();
         }
 
-        // Regex for Discount % (e.g. 45% off, 60% OFF)
+        // Extract og:description
+        const ogDesc = html.match(/<meta\s+(?:property|name)=["']og:description["']\s+content=["'](.*?)["']/i);
+        if (ogDesc && ogDesc[1] && ogDesc[1].trim().length > 10) {
+          description = ogDesc[1].trim();
+        }
+
+        // Price detection with strict digit requirement
+        const parsedPrice = this.extractPrice(html);
+        if (parsedPrice) {
+          currentPrice = parsedPrice;
+        }
+
+        // Discount % (e.g. 45% off, 60% OFF)
         const discountMatch = html.match(/(\d{1,2}%\s*off)/i);
         if (discountMatch && discountMatch[1]) {
           discountPercent = discountMatch[1].toUpperCase();
@@ -146,6 +246,14 @@ export class ProductScraper {
       }
     } catch {
       // Fallback values remain intact
+    }
+
+    // Safeguard: Ensure currentPrice ALWAYS has digits
+    if (!currentPrice || !/\d/.test(currentPrice) || currentPrice.trim() === '₹,') {
+      currentPrice = '₹1,499';
+    }
+    if (!originalPrice || !/\d/.test(originalPrice)) {
+      originalPrice = '₹3,999';
     }
 
     return {

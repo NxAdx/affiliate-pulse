@@ -238,6 +238,9 @@ export default function SettingsScreen() {
               secureTextEntry
             />
           </View>
+          <Text style={styles.helperText}>
+            Google OAuth tokens expire after 60 min. You can always tap "Copy HTML" in the Generator to paste directly into your Blogger dashboard!
+          </Text>
         </View>
       </View>
 
