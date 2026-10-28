@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "prebuild": "expo prebuild",
-    "build:apk": "npx expo prebuild --platform android --clean && cd android && ./gradlew assembleRelease --no-daemon"
+    "build:apk": "npx expo prebuild --platform android --clean && cd android && ./gradlew assembleRelease --no-daemon",
+    "autopilot": "node scripts/dealAutopilot.js"
   },
   "dependencies": {
     "@babel/runtime": "^7.20.0",

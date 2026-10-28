@@ -23,6 +23,7 @@ import { GeminiAiService } from '../../services/geminiAi';
 import { BloggerService } from '../../services/bloggerApi';
 import { TelegramService } from '../../services/telegramBot';
 import { PinCardView } from '../../components/PinCardView';
+import { DealHunterService } from '../../services/dealHunter';
 
 export default function GeneratorScreen() {
   const [inputUrl, setInputUrl] = useState('');
@@ -53,7 +54,10 @@ export default function GeneratorScreen() {
     setIsProcessing,
     settings,
     addDealToHistory,
+    dealsHistory,
   } = useAppStore();
+
+  const [isHunting, setIsHunting] = useState(false);
 
   const handlePasteClipboard = async () => {
     try {
@@ -126,6 +130,83 @@ export default function GeneratorScreen() {
       setStatusMessage(`Error: ${err?.message || 'Failed to process product'}`);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleAutoHuntDeal = async () => {
+    setIsHunting(true);
+    setStatusMessage(
+      `🔍 Hunting Amazon for ${selectedCategory === 'fashion' ? "Men's Fashion (≥50% OFF)" : 'Tech & Electronics (≥40% OFF)'}...`
+    );
+
+    try {
+      const postedAsins = (dealsHistory || [])
+        .map((d) => d.product.asin)
+        .filter((a): a is string => Boolean(a));
+
+      const deal = await DealHunterService.huntTopDeal(
+        postedAsins,
+        settings.amazonAffiliateTag || 'dealhunter-21',
+        selectedCategory
+      );
+
+      if (!deal) {
+        setStatusMessage('No new unseen deals found meeting discount threshold right now.');
+        Alert.alert('Deal Hunt Complete', 'No new unseen deals found right now meeting the discount threshold. Try switching category or hunting again.');
+        return;
+      }
+
+      setInputUrl(deal.affiliateUrl);
+      setCustomTitle(deal.title);
+      setCustomPrice(deal.price);
+      setCustomMrp(deal.mrp || '');
+      setCustomDiscount(deal.discount);
+      setCustomImageUrl(deal.imageUrl);
+
+      setStatusMessage(`✨ Found ${deal.discount} OFF: ${deal.title.substring(0, 35)}... Generating copy!`);
+
+      const product = {
+        originalUrl: deal.affiliateUrl,
+        canonicalUrl: deal.affiliateUrl,
+        affiliateUrl: deal.affiliateUrl,
+        platform: 'amazon' as const,
+        title: deal.title,
+        description: `${deal.title} - ${deal.discount} OFF on Amazon`,
+        imageUrl: deal.imageUrl,
+        currentPrice: deal.price,
+        originalPrice: deal.mrp,
+        discountPercent: deal.discount,
+        asin: deal.asin,
+        features: [`${deal.discount} OFF Discount Deal`, 'Verified Top Rated Item'],
+      };
+
+      setActiveProduct(product);
+
+      // Generate Gemini Content
+      const gemini = new GeminiAiService(settings.geminiApiKey);
+      let content;
+      if (selectedCategory === 'electronics') {
+        content = await gemini.generateElectronicsDeal(product);
+      } else {
+        content = await gemini.generateFashionPin(product);
+      }
+      setActiveContent(content);
+
+      // Save to MMKV History
+      addDealToHistory({
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+        category: selectedCategory,
+        product,
+        content,
+        status: {},
+      });
+
+      setStatusMessage(`🎯 Discovered ${deal.discount} OFF deal! Ready to broadcast.`);
+    } catch (err: any) {
+      setStatusMessage(`Hunting error: ${err?.message || 'Network issue'}`);
+    } finally {
+      setIsHunting(false);
     }
   };
 
@@ -378,6 +459,45 @@ export default function GeneratorScreen() {
           >
             Men's Fashion (Pin)
           </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 24/7 Autonomous Deal Hunter Card */}
+      <View style={styles.autoHunterCard}>
+        <View style={styles.autoHunterHeader}>
+          <View style={styles.autoHunterTitleRow}>
+            <Ionicons name="sparkles" size={17} color={theme.colors.accentDeal} />
+            <Text style={styles.autoHunterTitle}>Autonomous Deal Hunter</Text>
+          </View>
+          <View style={styles.priorityBadge}>
+            <Text style={styles.priorityBadgeText}>
+              {selectedCategory === 'fashion' ? 'FASHION 1ST (≥50% OFF)' : 'TECH 2ND (≥40% OFF)'}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.autoHunterSub}>
+          Auto-discovers high-discount deals on Amazon, injects your affiliate tag, and prepares cross-channel syndication hands-free.
+        </Text>
+
+        <TouchableOpacity
+          style={[styles.autoHunterBtn, isHunting && styles.buttonDisabled]}
+          onPress={handleAutoHuntDeal}
+          disabled={isHunting || isProcessing}
+          activeOpacity={0.85}
+        >
+          {isHunting ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <View style={styles.autoHunterBtnInner}>
+              <Ionicons name="flash" size={16} color="#FFFFFF" />
+              <Text style={styles.autoHunterBtnText}>
+                {selectedCategory === 'fashion'
+                  ? '⚡ Auto-Hunt Fashion Deal (≥50% Off)'
+                  : '⚡ Auto-Hunt Tech Deal (≥40% Off)'}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -1013,6 +1133,69 @@ const styles = StyleSheet.create({
   },
   categoryPillTextActive: {
     color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  autoHunterCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    padding: 16,
+    marginBottom: 16,
+    ...theme.shadows.glowDeal,
+  },
+  autoHunterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  autoHunterTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  autoHunterTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: theme.typography.sizes.sm,
+    fontWeight: '700',
+  },
+  priorityBadge: {
+    backgroundColor: theme.colors.accentDealGlow,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: theme.radii.full,
+  },
+  priorityBadgeText: {
+    color: theme.colors.accentDeal,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  autoHunterSub: {
+    color: theme.colors.textMuted,
+    fontSize: theme.typography.sizes.xxs,
+    lineHeight: 16,
+    marginBottom: 12,
+  },
+  autoHunterBtn: {
+    backgroundColor: theme.colors.accentDeal,
+    borderRadius: theme.radii.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...theme.shadows.glowDeal,
+  },
+  autoHunterBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  autoHunterBtnText: {
+    color: '#FFFFFF',
+    fontSize: theme.typography.sizes.xs,
     fontWeight: '700',
   },
   inputCard: {

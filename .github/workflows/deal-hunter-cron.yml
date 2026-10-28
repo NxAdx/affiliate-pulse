@@ -1,0 +1,41 @@
+name: 24/7 Autonomous Deal Hunter & Syndicator
+
+on:
+  schedule:
+    # Runs every 2 hours (UTC: 0:00, 2:00, 4:00, 6:00, 8:00, 10:00, 12:00, 14:00, 16:00, 18:00, 20:00, 22:00)
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  hunt-and-syndicate:
+    name: Hunt Deals & Syndicate to Channels
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Autonomous Deal Autopilot
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG || 'dealhunter-21' }}
+          MIN_FASHION_DISCOUNT: '50'
+          MIN_TECH_DISCOUNT: '40'
+        run: node scripts/dealAutopilot.js
+
+      - name: Commit & Sync Deal Cache
+        run: |
+          git config --global user.name "AffiliatePulseBot"
+          git config --global user.email "bot@affiliatepulse.local"
+          git add deals_cache.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore(cache): update autonomous deal history cache [skip ci]" && git push)
