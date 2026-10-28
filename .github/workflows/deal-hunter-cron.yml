@@ -31,6 +31,7 @@ jobs:
           AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG || 'dealhunter-21' }}
           MIN_FASHION_DISCOUNT: '50'
           MIN_TECH_DISCOUNT: '40'
+          DEALS_PER_RUN: '3'
         run: node scripts/dealAutopilot.js
 
       - name: Commit & Sync Deal Cache

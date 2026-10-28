@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -58,6 +58,18 @@ export default function GeneratorScreen() {
   } = useAppStore();
 
   const [isHunting, setIsHunting] = useState(false);
+
+  // Sync state whenever activeProduct is loaded (from Vault History or Deal Hunter)
+  useEffect(() => {
+    if (activeProduct) {
+      setCustomTitle(activeProduct.title || '');
+      setCustomPrice(activeProduct.currentPrice || '');
+      setCustomMrp(activeProduct.originalPrice || '');
+      setCustomDiscount(activeProduct.discountPercent || '');
+      setCustomImageUrl(activeProduct.imageUrl || '');
+      setInputUrl(activeProduct.originalUrl || activeProduct.affiliateUrl || '');
+    }
+  }, [activeProduct]);
 
   const handlePasteClipboard = async () => {
     try {

@@ -24,6 +24,12 @@ const CONFIG = {
   bloggerToken: process.env.BLOGGER_ACCESS_TOKEN || '',
   minFashionDiscount: parseInt(process.env.MIN_FASHION_DISCOUNT || '50', 10),
   minTechDiscount: parseInt(process.env.MIN_TECH_DISCOUNT || '40', 10),
+  dealsPerRun: parseInt(
+    process.env.DEALS_PER_RUN ||
+      process.argv.find((a) => a.startsWith('--count='))?.split('=')[1] ||
+      '3',
+    10
+  ),
 };
 
 const CATEGORY_SEARCHES = [
@@ -266,16 +272,21 @@ async function runAutopilot() {
   console.log('====================================================');
   console.log('🤖 AFFILIATE PULSE - AUTONOMOUS 24/7 DEAL HUNTER');
   console.log('====================================================');
+  console.log(`🎯 Target Batch Quota: Up to ${CONFIG.dealsPerRun} high-converting deals per run`);
 
   const postedAsins = loadPostedAsins();
   const postedSet = new Set(postedAsins);
   console.log(`📚 Loaded ${postedSet.size} previously syndicated deals from cache.`);
 
-  let selectedDeal = null;
+  const selectedDeals = [];
 
   for (const config of CATEGORY_SEARCHES) {
+    if (selectedDeals.length >= CONFIG.dealsPerRun) break;
     console.log(`\n🎯 Hunting in: ${config.name} (Min ${config.minDiscount}% OFF)...`);
+
     for (const url of config.urls) {
+      if (selectedDeals.length >= CONFIG.dealsPerRun) break;
+
       try {
         const html = await fetchHtml(url);
         const asins = [...html.matchAll(/data-asin="([A-Z0-9]{10})"/g)]
@@ -286,14 +297,20 @@ async function runAutopilot() {
         if (unique.length === 0) continue;
 
         for (const candidateAsin of unique.slice(0, 4)) {
+          if (selectedDeals.length >= CONFIG.dealsPerRun) break;
+
           const prodHtml = await fetchHtml(`https://www.amazon.in/dp/${candidateAsin}`);
           const deal = parseProductPage(prodHtml, candidateAsin, config.category);
 
           if (deal) {
             const numericDiscount = parseInt(deal.discount.replace(/[^0-9]/g, ''), 10) || 0;
             if (numericDiscount >= config.minDiscount) {
-              selectedDeal = deal;
-              console.log(`✨ FOUND WINNING DEAL in ${config.name}!`);
+              selectedDeals.push(deal);
+              postedSet.add(deal.asin);
+              console.log(
+                `✨ FOUND WINNING DEAL #${selectedDeals.length}/${CONFIG.dealsPerRun} in ${config.name}: ${deal.title.slice(0, 35)}...`
+              );
+              // Pick 1 deal per URL query to ensure high diversity across products
               break;
             }
           }
@@ -301,43 +318,44 @@ async function runAutopilot() {
       } catch (e) {
         console.warn(`Warning hunting ${url}:`, e.message);
       }
-      if (selectedDeal) break;
     }
-    if (selectedDeal) break;
   }
 
-  if (!selectedDeal) {
+  if (selectedDeals.length === 0) {
     console.log('\n😴 No new unseen deals found meeting discount threshold this run. Will check next cycle.');
     return;
   }
 
-  console.log('\n--- 🏆 Selected Deal Summary ---');
-  console.log('Category:', selectedDeal.category.toUpperCase());
-  console.log('Title:', selectedDeal.title);
-  console.log('Deal Price:', selectedDeal.price, selectedDeal.mrp ? `(MRP: ${selectedDeal.mrp})` : '');
-  console.log('Discount:', selectedDeal.discount, 'OFF');
-  console.log('Affiliate URL:', selectedDeal.affiliateUrl);
-  console.log('Image URL:', selectedDeal.imageUrl || 'None');
+  console.log(`\n🏆 Discovered ${selectedDeals.length} Winning Deals for Syndication Batch:`);
+  selectedDeals.forEach((d, i) => {
+    console.log(`  ${i + 1}. [${d.category.toUpperCase()}] ${d.title.slice(0, 40)}... (${d.discount} OFF, ${d.price})`);
+  });
 
-  console.log('\n✍️ Generating AI Copy...');
-  const copy = await generateDealCopy(selectedDeal);
-  console.log('\n--- Generated Telegram Copy ---');
-  console.log(copy);
-  console.log('-------------------------------');
+  // Syndicate each deal in the batch
+  for (let i = 0; i < selectedDeals.length; i++) {
+    const deal = selectedDeals[i];
+    console.log(`\n--- 🚀 Syndicating Deal ${i + 1}/${selectedDeals.length}: ${deal.title.slice(0, 35)}... ---`);
 
-  console.log('\n📡 Broadcasting Deal...');
-  const broadcasted = await broadcastToTelegram(selectedDeal, copy);
+    console.log('✍️ Generating AI Copy...');
+    const copy = await generateDealCopy(deal);
+    console.log('\nGenerated Caption Preview:');
+    console.log(copy);
 
-  // Save to cache so this ASIN is never syndicated again
-  savePostedAsin(
-    selectedDeal.asin,
-    selectedDeal.title,
-    selectedDeal.price,
-    selectedDeal.category
-  );
-  console.log(`💾 Saved ASIN ${selectedDeal.asin} to cache.`);
+    console.log('\n📡 Broadcasting Deal to Channels...');
+    await broadcastToTelegram(deal, copy);
 
-  console.log('\n🎉 Autonomous Deal Run Finished Successfully!');
+    // Save to cache so this ASIN is never syndicated again
+    savePostedAsin(deal.asin, deal.title, deal.price, deal.category);
+    console.log(`💾 Saved ASIN ${deal.asin} to cache.`);
+
+    // If there are more deals, stagger by 3.5s to comply with Telegram API rate limits
+    if (i < selectedDeals.length - 1) {
+      console.log('⏳ Staggering next deal broadcast by 3.5 seconds to respect rate limits...');
+      await new Promise((resolve) => setTimeout(resolve, 3500));
+    }
+  }
+
+  console.log('\n🎉 Autonomous Deal Batch Run Finished Successfully!');
 }
 
 runAutopilot().catch((err) => {

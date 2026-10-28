@@ -1,29 +1,115 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Share } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Share,
+  Image,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { useAppStore } from '../../store/useAppStore';
 import { theme } from '../../theme';
+import { TelegramService } from '../../services/telegramBot';
+import { DealRecord } from '../../types';
 
 export default function HistoryScreen() {
   const router = useRouter();
-  const { dealsHistory, clearHistory, removeDealFromHistory } = useAppStore();
+  const {
+    dealsHistory,
+    clearHistory,
+    removeDealFromHistory,
+    setActiveProduct,
+    setActiveContent,
+    setSelectedCategory,
+    settings,
+  } = useAppStore();
 
-  const handleCopy = async (url: string) => {
+  const [broadcastingId, setBroadcastingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  /**
+   * Loads product and all generated copy back into the Studio workspace
+   * Navigates to the Generator screen where all channels and tuning fields are ready to share.
+   */
+  const handleLoadInStudio = (deal: DealRecord) => {
+    setActiveProduct(deal.product);
+    setActiveContent(deal.content);
+    setSelectedCategory(deal.category);
+    router.push('/(tabs)');
+  };
+
+  const handleCopyLink = async (deal: DealRecord) => {
+    const url = deal.product.affiliateUrl || deal.product.originalUrl;
     if (url) {
       await Clipboard.setStringAsync(url);
+      setCopiedId(deal.id);
+      setTimeout(() => setCopiedId(null), 2000);
     }
   };
 
-  const handleShare = (title: string, url: string) => {
+  const handleShareSystem = (deal: DealRecord) => {
+    const msg =
+      deal.content?.whatsappMessage ||
+      `🔥 LOOT DEAL: ${deal.product.title}\n💰 Deal Price: ${deal.product.currentPrice} ${
+        deal.product.discountPercent ? `(${deal.product.discountPercent})` : ''
+      }\n👉 Grab it here: ${deal.product.affiliateUrl}`;
+
     Share.share({
-      message: `${title} 👉 ${url}`,
+      message: msg,
+      title: deal.product.title,
     });
+  };
+
+  const handleBroadcastTelegram = async (deal: DealRecord) => {
+    if (!settings.telegramBotToken?.trim() || !settings.telegramChannelId?.trim()) {
+      Alert.alert(
+        'Telegram Setup Required',
+        'Please enter your Telegram Bot Token and Channel ID in the Settings tab to broadcast directly from History.',
+        [
+          { text: 'Go to Settings', onPress: () => router.push('/(tabs)/settings') },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
+    const copy =
+      deal.content?.telegramMarkdown ||
+      `🔥 ${deal.product.discountPercent || 'LOOT'} DEAL!\n\n🛍️ ${deal.product.title}\n\n💰 Price: ${deal.product.currentPrice}\n👉 Buy Link: ${deal.product.affiliateUrl}`;
+
+    try {
+      setBroadcastingId(deal.id);
+      const res = await TelegramService.broadcastDeal(
+        settings.telegramBotToken,
+        settings.telegramChannelId,
+        copy,
+        deal.product.imageUrl
+      );
+
+      if (res.success) {
+        Alert.alert(
+          'Telegram Broadcast Sent 🚀',
+          `Successfully posted "${deal.product.title.slice(0, 32)}..." to ${settings.telegramChannelId} with product image!`
+        );
+      } else {
+        Alert.alert('Telegram Error', res.error || 'Failed to post to Telegram channel.');
+      }
+    } catch (err: any) {
+      Alert.alert('Network Error', err?.message || 'Could not communicate with Telegram.');
+    } finally {
+      setBroadcastingId(null);
+    }
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* Top Header */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           <Ionicons name="archive-outline" size={18} color={theme.colors.primaryLight} />
@@ -48,11 +134,11 @@ export default function HistoryScreen() {
           </View>
           <Text style={styles.emptyTitle}>Vault is Empty</Text>
           <Text style={styles.emptySub}>
-            Paste an Amazon, Flipkart, or Myntra link in the Generator to syndicate your first deal.
+            Paste an Amazon, Flipkart, or Myntra link, or use the 24/7 Deal Hunter to syndicate your first deal.
           </Text>
           <TouchableOpacity
             style={styles.ctaBtn}
-            onPress={() => router.push('/')}
+            onPress={() => router.push('/(tabs)')}
             activeOpacity={0.85}
           >
             <Ionicons name="flash" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
@@ -63,76 +149,140 @@ export default function HistoryScreen() {
         <View style={styles.listContainer}>
           {dealsHistory.map((item) => (
             <View key={item.id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={styles.badgesRow}>
-                  <View
-                    style={[
-                      styles.categoryBadge,
-                      item.category === 'fashion'
-                        ? { backgroundColor: theme.colors.secondaryGlow, borderColor: theme.colors.secondary }
-                        : { backgroundColor: theme.colors.primaryGlow, borderColor: theme.colors.primary },
-                    ]}
-                  >
-                    <Text
+              {/* Tap Card Body to Load in Studio */}
+              <TouchableOpacity
+                onPress={() => handleLoadInStudio(item)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.badgesRow}>
+                    <View
                       style={[
-                        styles.categoryBadgeText,
-                        { color: item.category === 'fashion' ? theme.colors.secondaryLight : theme.colors.primaryLight },
+                        styles.categoryBadge,
+                        item.category === 'fashion'
+                          ? { backgroundColor: theme.colors.secondaryGlow, borderColor: theme.colors.secondary }
+                          : { backgroundColor: theme.colors.primaryGlow, borderColor: theme.colors.primary },
                       ]}
                     >
-                      {item.category === 'fashion' ? '👔 FASHION PIN' : '⚡ TECH DEAL'}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.categoryBadgeText,
+                          {
+                            color:
+                              item.category === 'fashion'
+                                ? theme.colors.secondaryLight
+                                : theme.colors.primaryLight,
+                          },
+                        ]}
+                      >
+                        {item.category === 'fashion' ? '👔 FASHION PIN' : '⚡ TECH DEAL'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.platformBadge}>
+                      <Text style={styles.platformBadgeText}>
+                        {(item.product.platform || 'AMAZON').toUpperCase()}
+                      </Text>
+                    </View>
                   </View>
 
-                  <View style={styles.platformBadge}>
-                    <Text style={styles.platformBadgeText}>
-                      {(item.product.platform || 'DEAL').toUpperCase()}
-                    </Text>
-                  </View>
+                  <Text style={styles.dateText}>
+                    {new Date(item.createdAt).toLocaleDateString()}
+                  </Text>
                 </View>
 
-                <Text style={styles.dateText}>
-                  {new Date(item.createdAt).toLocaleDateString()}
-                </Text>
-              </View>
+                {/* Product Info Row with Thumbnail */}
+                <View style={styles.productRow}>
+                  {item.product.imageUrl ? (
+                    <Image
+                      source={{ uri: item.product.imageUrl }}
+                      style={styles.thumbnail}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.thumbnailPlaceholder}>
+                      <Ionicons name="image-outline" size={24} color={theme.colors.textMuted} />
+                    </View>
+                  )}
 
-              <Text style={styles.productTitle} numberOfLines={2}>
-                {item.product.title}
-              </Text>
+                  <View style={styles.productInfo}>
+                    <Text style={styles.productTitle} numberOfLines={2}>
+                      {item.product.title}
+                    </Text>
 
-              <View style={styles.priceRow}>
-                <Text style={styles.priceText}>
-                  {item.product.currentPrice && /\d/.test(item.product.currentPrice)
-                    ? item.product.currentPrice
-                    : '₹1,499'}
-                </Text>
-                {item.product.originalPrice && /\d/.test(item.product.originalPrice) ? (
-                  <Text style={styles.originalPriceText}>{item.product.originalPrice}</Text>
-                ) : null}
-                {item.product.discountPercent ? (
-                  <View style={styles.discountPill}>
-                    <Text style={styles.discountPillText}>{item.product.discountPercent}</Text>
+                    <View style={styles.priceRow}>
+                      <Text style={styles.priceText}>
+                        {item.product.currentPrice && /\d/.test(item.product.currentPrice)
+                          ? item.product.currentPrice
+                          : '₹1,499'}
+                      </Text>
+                      {item.product.originalPrice && /\d/.test(item.product.originalPrice) ? (
+                        <Text style={styles.originalPriceText}>{item.product.originalPrice}</Text>
+                      ) : null}
+                      {item.product.discountPercent ? (
+                        <View style={styles.discountPill}>
+                          <Text style={styles.discountPillText}>{item.product.discountPercent}</Text>
+                        </View>
+                      ) : null}
+                    </View>
                   </View>
-                ) : null}
-              </View>
+                </View>
+              </TouchableOpacity>
 
-              {/* Action Toolbar */}
+              {/* Primary Call-to-Action Button */}
+              <TouchableOpacity
+                style={styles.loadStudioBtn}
+                onPress={() => handleLoadInStudio(item)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="flash" size={14} color="#FFFFFF" />
+                <Text style={styles.loadStudioBtnText}>
+                  Load in Studio & Share All Channels →
+                </Text>
+              </TouchableOpacity>
+
+              {/* Quick Action Toolbar */}
               <View style={styles.actionToolbar}>
                 <TouchableOpacity
                   style={styles.toolBtn}
-                  onPress={() => handleCopy(item.product.affiliateUrl)}
+                  onPress={() => handleBroadcastTelegram(item)}
+                  disabled={broadcastingId === item.id}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="copy-outline" size={14} color={theme.colors.textSecondary} />
-                  <Text style={styles.toolBtnText}>Copy Link</Text>
+                  {broadcastingId === item.id ? (
+                    <ActivityIndicator size="small" color={theme.colors.telegram} />
+                  ) : (
+                    <>
+                      <Ionicons name="paper-plane" size={13} color={theme.colors.telegram} />
+                      <Text style={[styles.toolBtnText, { color: theme.colors.telegram }]}>
+                        Telegram
+                      </Text>
+                    </>
+                  )}
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.toolBtn}
-                  onPress={() => handleShare(item.product.title, item.product.affiliateUrl)}
+                  onPress={() => handleShareSystem(item)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="share-social-outline" size={14} color={theme.colors.textSecondary} />
-                  <Text style={styles.toolBtnText}>Share</Text>
+                  <Ionicons name="logo-whatsapp" size={13} color="#25D366" />
+                  <Text style={[styles.toolBtnText, { color: '#25D366' }]}>WhatsApp</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.toolBtn}
+                  onPress={() => handleCopyLink(item)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={copiedId === item.id ? 'checkmark' : 'copy-outline'}
+                    size={13}
+                    color={theme.colors.textSecondary}
+                  />
+                  <Text style={styles.toolBtnText}>
+                    {copiedId === item.id ? 'Copied' : 'Copy Link'}
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -140,7 +290,7 @@ export default function HistoryScreen() {
                   onPress={() => removeDealFromHistory(item.id)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="trash-outline" size={14} color={theme.colors.accentDanger} />
+                  <Ionicons name="trash-outline" size={13} color={theme.colors.accentDanger} />
                   <Text style={styles.deleteBtnText}>Remove</Text>
                 </TouchableOpacity>
               </View>
@@ -252,7 +402,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: theme.colors.surface,
-    padding: 16,
+    padding: 14,
     borderRadius: theme.radii.lg,
     borderWidth: 1,
     borderColor: theme.colors.borderSubtle,
@@ -298,18 +448,44 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     fontSize: theme.typography.sizes.xxs,
   },
+  productRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  thumbnail: {
+    width: 68,
+    height: 68,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+  },
+  thumbnailPlaceholder: {
+    width: 68,
+    height: 68,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productInfo: {
+    flex: 1,
+  },
   productTitle: {
     color: theme.colors.textPrimary,
     fontSize: theme.typography.sizes.sm,
     fontWeight: '600',
-    lineHeight: 20,
-    marginBottom: 8,
+    lineHeight: 18,
+    marginBottom: 6,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
   },
   priceText: {
     color: theme.colors.accentDeal,
@@ -334,11 +510,29 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
+  loadStudioBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: theme.colors.surfaceElevated,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+    marginBottom: 10,
+  },
+  loadStudioBtnText: {
+    color: theme.colors.primaryLight,
+    fontSize: theme.typography.sizes.xs,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
   actionToolbar: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
     borderTopWidth: 1,
     borderTopColor: theme.colors.borderSubtle,
     paddingTop: 10,

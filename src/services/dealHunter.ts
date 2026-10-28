@@ -136,15 +136,17 @@ export class DealHunterService {
   }
 
   /**
-   * Hunts for top deals prioritizing Fashion first, then Tech, then General
-   * Filters by minimum discount and skips already posted ASINs
+   * Hunts for top deals prioritizing Fashion first (≥50% OFF), then Tech (≥40% OFF), then General
+   * Discovers up to `count` unique high-discount deals in a batch
    */
-  static async huntTopDeal(
+  static async huntTopDeals(
+    count: number = 3,
     postedAsins: string[] = [],
     associateTag: string = 'dealhunter-21',
     categoryPreference?: DealCategory
-  ): Promise<HuntedDeal | null> {
+  ): Promise<HuntedDeal[]> {
     const postedSet = new Set(postedAsins);
+    const discoveredDeals: HuntedDeal[] = [];
 
     // Filter configs by user preference if specified, else follow strict priority
     const configs = categoryPreference
@@ -152,7 +154,11 @@ export class DealHunterService {
       : this.CATEGORY_CONFIGS;
 
     for (const config of configs) {
+      if (discoveredDeals.length >= count) break;
+
       for (const queryUrl of config.queries) {
+        if (discoveredDeals.length >= count) break;
+
         try {
           const searchHtml = await this.fetchHtml(queryUrl);
           const asins = [...searchHtml.matchAll(/data-asin="([A-Z0-9]{10})"/g)]
@@ -162,8 +168,9 @@ export class DealHunterService {
           const uniqueAsins = [...new Set(asins)];
           if (uniqueAsins.length === 0) continue;
 
-          // Check first few candidates
-          for (const candidateAsin of uniqueAsins.slice(0, 3)) {
+          for (const candidateAsin of uniqueAsins.slice(0, 4)) {
+            if (discoveredDeals.length >= count) break;
+
             const productHtml = await this.fetchHtml(
               `https://www.amazon.in/dp/${candidateAsin}`
             );
@@ -177,7 +184,8 @@ export class DealHunterService {
             if (deal) {
               const numericDiscount = parseInt(deal.discount.replace(/[^0-9]/g, ''), 10) || 0;
               if (numericDiscount >= config.minDiscount) {
-                return deal;
+                discoveredDeals.push(deal);
+                postedSet.add(deal.asin);
               }
             }
           }
@@ -188,6 +196,18 @@ export class DealHunterService {
       }
     }
 
-    return null;
+    return discoveredDeals;
+  }
+
+  /**
+   * Hunts for single top deal meeting discount threshold
+   */
+  static async huntTopDeal(
+    postedAsins: string[] = [],
+    associateTag: string = 'dealhunter-21',
+    categoryPreference?: DealCategory
+  ): Promise<HuntedDeal | null> {
+    const deals = await this.huntTopDeals(1, postedAsins, associateTag, categoryPreference);
+    return deals.length > 0 ? deals[0] : null;
   }
 }
