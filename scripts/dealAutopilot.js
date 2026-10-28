@@ -38,9 +38,16 @@ const CATEGORY_SEARCHES = [
     name: "Men's Fashion & Footwear",
     minDiscount: CONFIG.minFashionDiscount,
     urls: [
-      'https://www.amazon.in/s?k=mens+sneakers+clothing&rh=p_8%3A50-',
-      'https://www.amazon.in/s?k=mens+watches+jackets&rh=p_8%3A50-',
-      'https://www.amazon.in/s?k=mens+tshirts+jeans&rh=p_8%3A50-',
+      'https://www.amazon.in/s?k=mens+sneakers+running+shoes&rh=p_8%3A50-',
+      'https://www.amazon.in/s?k=mens+analog+watches+chronograph&rh=p_8%3A50-',
+      'https://www.amazon.in/s?k=mens+polo+tshirts+cotton&rh=p_8%3A50-',
+      'https://www.amazon.in/s?k=mens+casual+shirts+slim+fit&rh=p_8%3A50-',
+      'https://www.amazon.in/s?k=mens+jeans+denim+pants&rh=p_8%3A50-',
+      'https://www.amazon.in/s?k=mens+leather+wallets+belts&rh=p_8%3A50-',
+      'https://www.amazon.in/s?k=mens+jackets+hoodies+sweatshirts&rh=p_8%3A50-',
+      'https://www.amazon.in/s?k=mens+loafers+formal+shoes&rh=p_8%3A50-',
+      'https://www.amazon.in/s?k=mens+sunglasses+polarised&rh=p_8%3A50-',
+      'https://www.amazon.in/s?k=mens+trackpants+gym+wear&rh=p_8%3A50-',
     ],
   },
   {
@@ -48,9 +55,16 @@ const CATEGORY_SEARCHES = [
     name: 'Tech & Electronics',
     minDiscount: CONFIG.minTechDiscount,
     urls: [
-      'https://www.amazon.in/s?k=tws+earbuds+smartwatch&rh=p_8%3A40-',
-      'https://www.amazon.in/s?k=wireless+headphones+speakers&rh=p_8%3A40-',
-      'https://www.amazon.in/s?k=power+bank+fast+charger&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=tws+wireless+earbuds+anc&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=amoled+smartwatch+fitness+tracker&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=bluetooth+portable+speakers+bass&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=power+bank+fast+charging+20000mah&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=gaming+headphones+with+mic&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=mechanical+gaming+keyboard+mouse&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=smart+home+wifi+plug+bulb&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=laptop+backpack+tech+organiser&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=external+ssd+type+c+drive&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=action+camera+vlogging+accessories&rh=p_8%3A40-',
     ],
   },
   {
@@ -58,8 +72,12 @@ const CATEGORY_SEARCHES = [
     name: 'Home & Daily Essentials',
     minDiscount: 40,
     urls: [
-      'https://www.amazon.in/s?k=home+gadgets+essentials&rh=p_8%3A40-',
-      'https://www.amazon.in/s?k=kitchen+appliances+tools&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=kitchen+gadgets+air+fryer&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=robotic+vacuum+cleaner+mop&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=coffee+maker+espresso+machine&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=electric+kettle+sandwich+maker&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=home+tools+screwdriver+drill+kit&rh=p_8%3A40-',
+      'https://www.amazon.in/s?k=desk+lamp+led+study+light&rh=p_8%3A40-',
     ],
   },
 ];
@@ -268,6 +286,15 @@ async function broadcastToTelegram(deal, copy) {
   }
 }
 
+function shuffle(array) {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 async function runAutopilot() {
   console.log('====================================================');
   console.log('🤖 AFFILIATE PULSE - AUTONOMOUS 24/7 DEAL HUNTER');
@@ -280,43 +307,67 @@ async function runAutopilot() {
 
   const selectedDeals = [];
 
-  for (const config of CATEGORY_SEARCHES) {
-    if (selectedDeals.length >= CONFIG.dealsPerRun) break;
-    console.log(`\n🎯 Hunting in: ${config.name} (Min ${config.minDiscount}% OFF)...`);
+  // Round-robin across categories to guarantee varied niches (Fashion -> Tech -> Home Essentials)
+  let round = 0;
+  const maxRounds = 3;
 
-    for (const url of config.urls) {
+  while (selectedDeals.length < CONFIG.dealsPerRun && round < maxRounds) {
+    round++;
+
+    for (const config of CATEGORY_SEARCHES) {
       if (selectedDeals.length >= CONFIG.dealsPerRun) break;
+      console.log(`\n🎯 Hunting in: ${config.name} (Min ${config.minDiscount}% OFF, Round ${round})...`);
 
-      try {
-        const html = await fetchHtml(url);
-        const asins = [...html.matchAll(/data-asin="([A-Z0-9]{10})"/g)]
-          .map((m) => m[1])
-          .filter((a) => a && a !== 'undefined' && !postedSet.has(a));
+      // Shuffle query URLs to explore fresh product sub-niches each time
+      const shuffledUrls = shuffle(config.urls);
 
-        const unique = [...new Set(asins)];
-        if (unique.length === 0) continue;
+      for (const baseUrl of shuffledUrls) {
+        if (selectedDeals.length >= CONFIG.dealsPerRun) break;
 
-        for (const candidateAsin of unique.slice(0, 4)) {
-          if (selectedDeals.length >= CONFIG.dealsPerRun) break;
+        // Randomly explore page 1, 2, or 3 to bypass pinned/sponsored listings
+        const randomPage = Math.floor(Math.random() * 3) + 1;
+        const url = randomPage > 1 ? `${baseUrl}&page=${randomPage}` : baseUrl;
 
-          const prodHtml = await fetchHtml(`https://www.amazon.in/dp/${candidateAsin}`);
-          const deal = parseProductPage(prodHtml, candidateAsin, config.category);
+        try {
+          const html = await fetchHtml(url);
+          const asins = [...html.matchAll(/data-asin="([A-Z0-9]{10})"/g)]
+            .map((m) => m[1])
+            .filter((a) => a && a !== 'undefined' && !postedSet.has(a));
 
-          if (deal) {
-            const numericDiscount = parseInt(deal.discount.replace(/[^0-9]/g, ''), 10) || 0;
-            if (numericDiscount >= config.minDiscount) {
-              selectedDeals.push(deal);
-              postedSet.add(deal.asin);
-              console.log(
-                `✨ FOUND WINNING DEAL #${selectedDeals.length}/${CONFIG.dealsPerRun} in ${config.name}: ${deal.title.slice(0, 35)}...`
-              );
-              // Pick 1 deal per URL query to ensure high diversity across products
-              break;
+          const unique = [...new Set(asins)];
+          if (unique.length === 0) continue;
+
+          // Shuffle candidate ASINs across the page
+          const candidateAsins = shuffle(unique).slice(0, 8);
+
+          for (const candidateAsin of candidateAsins) {
+            if (selectedDeals.length >= CONFIG.dealsPerRun) break;
+
+            const prodHtml = await fetchHtml(`https://www.amazon.in/dp/${candidateAsin}`);
+            const deal = parseProductPage(prodHtml, candidateAsin, config.category);
+
+            if (deal) {
+              const numericDiscount = parseInt(deal.discount.replace(/[^0-9]/g, ''), 10) || 0;
+              if (numericDiscount >= config.minDiscount) {
+                selectedDeals.push(deal);
+                postedSet.add(deal.asin);
+                console.log(
+                  `✨ FOUND WINNING DEAL #${selectedDeals.length}/${CONFIG.dealsPerRun} in ${config.name}: ${deal.title.slice(0, 35)}... (${deal.discount} OFF)`
+                );
+                // Move to next category after 1 winning deal in this round to guarantee category diversity
+                break;
+              }
             }
           }
+        } catch (e) {
+          console.warn(`Warning hunting ${url}:`, e.message);
         }
-      } catch (e) {
-        console.warn(`Warning hunting ${url}:`, e.message);
+
+        // If we found a deal in this category during this round, move to next category
+        const dealsInThisCategory = selectedDeals.filter((d) => d.category === config.category);
+        if (dealsInThisCategory.length >= round) {
+          break;
+        }
       }
     }
   }

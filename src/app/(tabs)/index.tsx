@@ -58,6 +58,7 @@ export default function GeneratorScreen() {
   } = useAppStore();
 
   const [isHunting, setIsHunting] = useState(false);
+  const sessionHuntedAsinsRef = useRef<Set<string>>(new Set());
 
   // Sync state whenever activeProduct is loaded (from Vault History or Deal Hunter)
   useEffect(() => {
@@ -148,25 +149,40 @@ export default function GeneratorScreen() {
   const handleAutoHuntDeal = async () => {
     setIsHunting(true);
     setStatusMessage(
-      `🔍 Hunting Amazon for ${selectedCategory === 'fashion' ? "Men's Fashion (≥50% OFF)" : 'Tech & Electronics (≥40% OFF)'}...`
+      `🔍 Hunting Amazon for fresh ${selectedCategory === 'fashion' ? "Men's Fashion (≥50% OFF)" : 'Tech & Electronics (≥40% OFF)'}...`
     );
 
     try {
-      const postedAsins = (dealsHistory || [])
+      const historyAsins = (dealsHistory || [])
         .map((d) => d.product.asin)
         .filter((a): a is string => Boolean(a));
 
+      // Exclude Vault History, Session History, and active product so every hunt returns a new product
+      const excludedAsins = Array.from(
+        new Set([
+          ...historyAsins,
+          ...Array.from(sessionHuntedAsinsRef.current),
+          activeProduct?.asin,
+        ].filter((a): a is string => Boolean(a)))
+      );
+
       const deal = await DealHunterService.huntTopDeal(
-        postedAsins,
+        excludedAsins,
         settings.amazonAffiliateTag || 'dealhunter-21',
         selectedCategory
       );
 
       if (!deal) {
         setStatusMessage('No new unseen deals found meeting discount threshold right now.');
-        Alert.alert('Deal Hunt Complete', 'No new unseen deals found right now meeting the discount threshold. Try switching category or hunting again.');
+        Alert.alert(
+          'Deal Hunt Complete',
+          'All top deals matching the threshold in this category have been explored! Try switching categories or hunting again.'
+        );
         return;
       }
+
+      // Track in active session
+      sessionHuntedAsinsRef.current.add(deal.asin);
 
       setInputUrl(deal.affiliateUrl);
       setCustomTitle(deal.title);

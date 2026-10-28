@@ -24,9 +24,16 @@ export class DealHunterService {
       name: "Men's Fashion & Footwear",
       minDiscount: 50,
       queries: [
-        'https://www.amazon.in/s?k=mens+sneakers+clothing&rh=p_8%3A50-',
-        'https://www.amazon.in/s?k=mens+watches+jackets&rh=p_8%3A50-',
-        'https://www.amazon.in/s?k=mens+tshirts+jeans&rh=p_8%3A50-',
+        'https://www.amazon.in/s?k=mens+sneakers+running+shoes&rh=p_8%3A50-',
+        'https://www.amazon.in/s?k=mens+analog+watches+chronograph&rh=p_8%3A50-',
+        'https://www.amazon.in/s?k=mens+polo+tshirts+cotton&rh=p_8%3A50-',
+        'https://www.amazon.in/s?k=mens+casual+shirts+slim+fit&rh=p_8%3A50-',
+        'https://www.amazon.in/s?k=mens+jeans+denim+pants&rh=p_8%3A50-',
+        'https://www.amazon.in/s?k=mens+leather+wallets+belts&rh=p_8%3A50-',
+        'https://www.amazon.in/s?k=mens+jackets+hoodies+sweatshirts&rh=p_8%3A50-',
+        'https://www.amazon.in/s?k=mens+loafers+formal+shoes&rh=p_8%3A50-',
+        'https://www.amazon.in/s?k=mens+sunglasses+polarised&rh=p_8%3A50-',
+        'https://www.amazon.in/s?k=mens+trackpants+gym+wear&rh=p_8%3A50-',
       ],
     },
     {
@@ -34,9 +41,16 @@ export class DealHunterService {
       name: 'Tech & Electronics',
       minDiscount: 40,
       queries: [
-        'https://www.amazon.in/s?k=tws+earbuds+smartwatch&rh=p_8%3A40-',
-        'https://www.amazon.in/s?k=wireless+headphones+speakers&rh=p_8%3A40-',
-        'https://www.amazon.in/s?k=power+bank+fast+charger&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=tws+wireless+earbuds+anc&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=amoled+smartwatch+fitness+tracker&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=bluetooth+portable+speakers+bass&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=power+bank+fast+charging+20000mah&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=gaming+headphones+with+mic&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=mechanical+gaming+keyboard+mouse&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=smart+home+wifi+plug+bulb&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=laptop+backpack+tech+organiser&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=external+ssd+type+c+drive&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=action+camera+vlogging+accessories&rh=p_8%3A40-',
       ],
     },
     {
@@ -44,8 +58,12 @@ export class DealHunterService {
       name: 'Home & Daily Essentials',
       minDiscount: 40,
       queries: [
-        'https://www.amazon.in/s?k=home+gadgets+essentials&rh=p_8%3A40-',
-        'https://www.amazon.in/s?k=kitchen+appliances+tools&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=kitchen+gadgets+air+fryer&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=robotic+vacuum+cleaner+mop&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=coffee+maker+espresso+machine&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=electric+kettle+sandwich+maker&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=home+tools+screwdriver+drill+kit&rh=p_8%3A40-',
+        'https://www.amazon.in/s?k=desk+lamp+led+study+light&rh=p_8%3A40-',
       ],
     },
   ];
@@ -135,9 +153,18 @@ export class DealHunterService {
     };
   }
 
+  private static shuffle<T>(array: T[]): T[] {
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
   /**
    * Hunts for top deals prioritizing Fashion first (≥50% OFF), then Tech (≥40% OFF), then General
-   * Discovers up to `count` unique high-discount deals in a batch
+   * Discovers up to `count` unique high-discount deals with randomized query & page exploration
    */
   static async huntTopDeals(
     count: number = 3,
@@ -156,8 +183,15 @@ export class DealHunterService {
     for (const config of configs) {
       if (discoveredDeals.length >= count) break;
 
-      for (const queryUrl of config.queries) {
+      // Randomize queries so every run explores fresh sub-niches
+      const shuffledQueries = this.shuffle(config.queries);
+
+      for (const baseQueryUrl of shuffledQueries) {
         if (discoveredDeals.length >= count) break;
+
+        // Randomly explore page 1, 2, or 3 to avoid the exact same top sponsored listings
+        const randomPage = Math.floor(Math.random() * 3) + 1;
+        const queryUrl = randomPage > 1 ? `${baseQueryUrl}&page=${randomPage}` : baseQueryUrl;
 
         try {
           const searchHtml = await this.fetchHtml(queryUrl);
@@ -168,7 +202,10 @@ export class DealHunterService {
           const uniqueAsins = [...new Set(asins)];
           if (uniqueAsins.length === 0) continue;
 
-          for (const candidateAsin of uniqueAsins.slice(0, 4)) {
+          // Shuffle candidate ASINs across the page to ensure fresh product selection
+          const candidateAsins = this.shuffle(uniqueAsins).slice(0, 8);
+
+          for (const candidateAsin of candidateAsins) {
             if (discoveredDeals.length >= count) break;
 
             const productHtml = await this.fetchHtml(
@@ -186,6 +223,7 @@ export class DealHunterService {
               if (numericDiscount >= config.minDiscount) {
                 discoveredDeals.push(deal);
                 postedSet.add(deal.asin);
+                break; // Pick 1 deal per search query to maximize product diversity
               }
             }
           }
