@@ -340,7 +340,8 @@ export default function GeneratorScreen() {
       {
         title: activeContent.bloggerTitle,
         content: activeContent.bloggerHtmlBody,
-      }
+      },
+      settings.bloggerWebhookUrl
     );
     if (result.success) {
       setStatusMessage(`Published to Blogger: ${result.url || 'Live'}`);

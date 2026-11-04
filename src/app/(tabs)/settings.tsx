@@ -43,6 +43,7 @@ export default function SettingsScreen() {
   const [bloggerBlogId, setBloggerBlogId] = useState(settings.bloggerBlogId);
   const [bloggerToken, setBloggerToken] = useState(settings.bloggerAccessToken);
   const [bloggerEmail, setBloggerEmail] = useState(settings.bloggerEmail || '');
+  const [bloggerWebhookUrl, setBloggerWebhookUrl] = useState(settings.bloggerWebhookUrl || '');
   const [telegramToken, setTelegramToken] = useState(settings.telegramBotToken);
   const [telegramChannel, setTelegramChannel] = useState(settings.telegramChannelId);
 
@@ -68,6 +69,7 @@ export default function SettingsScreen() {
     setBloggerBlogId(settings.bloggerBlogId);
     setBloggerToken(settings.bloggerAccessToken);
     setBloggerEmail(settings.bloggerEmail || '');
+    setBloggerWebhookUrl(settings.bloggerWebhookUrl || '');
     setTelegramToken(settings.telegramBotToken);
     setTelegramChannel(settings.telegramChannelId);
   }, [settings]);
@@ -81,6 +83,7 @@ export default function SettingsScreen() {
       bloggerBlogId: bloggerBlogId.trim(),
       bloggerAccessToken: bloggerToken.trim(),
       bloggerEmail: bloggerEmail.trim(),
+      bloggerWebhookUrl: bloggerWebhookUrl.trim(),
       telegramBotToken: telegramToken.trim(),
       telegramChannelId: telegramChannel.trim(),
     });
@@ -92,7 +95,7 @@ export default function SettingsScreen() {
     setIsTestingBlogger(true);
     setBloggerTestResult(null);
     try {
-      const res = await BloggerService.testConnection(bloggerBlogId, bloggerToken);
+      const res = await BloggerService.testConnection(bloggerBlogId, bloggerToken, bloggerWebhookUrl);
       if (res.success) {
         setBloggerTestResult({
           success: true,
@@ -260,6 +263,29 @@ export default function SettingsScreen() {
             <Text style={styles.cardTitle}>Google Blogger (Blogspot)</Text>
           </View>
           <PortalLink label="Blogger Admin" url="https://www.blogger.com/" />
+        </View>
+
+        {/* RECOMMENDED METHOD: Google Apps Script Webhook (Direct & Permanent) */}
+        <View style={styles.inputGroup}>
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>Apps Script Webhook (Never Expires ⭐)</Text>
+            <PortalLink label="Apps Script Console" url="https://script.google.com/" />
+          </View>
+          <View style={styles.inputWrapper}>
+            <Ionicons name="flash-outline" size={16} color={theme.colors.accentDeal} style={styles.inputIcon} />
+            <TextInput
+              style={styles.inputWithIcon}
+              placeholder="https://script.google.com/macros/s/.../exec"
+              placeholderTextColor={theme.colors.textMuted}
+              value={bloggerWebhookUrl}
+              onChangeText={setBloggerWebhookUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+          <Text style={styles.helperText}>
+            Permanent direct publishing! Bypasses 60-min OAuth expiry. In Apps Script, set &quot;Who has access&quot; to &quot;Anyone&quot;.
+          </Text>
         </View>
 
         <View style={styles.inputGroup}>

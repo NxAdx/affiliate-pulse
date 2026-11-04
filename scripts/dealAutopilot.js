@@ -22,6 +22,9 @@ const CONFIG = {
   amazonTag: process.env.AMAZON_ASSOCIATE_TAG || 'dealhunter-21',
   bloggerBlogId: process.env.BLOGGER_BLOG_ID || '',
   bloggerToken: process.env.BLOGGER_ACCESS_TOKEN || '',
+  bloggerWebhookUrl:
+    process.env.BLOGGER_WEBHOOK_URL ||
+    'https://script.google.com/macros/s/AKfycbxh1BaXpDleljcWtTW_WSTtO-ks7UfQYQ78TkLVnYbpdgW15EiB5RycAIhgruAiRZPQ/exec',
   minFashionDiscount: parseInt(process.env.MIN_FASHION_DISCOUNT || '50', 10),
   minTechDiscount: parseInt(process.env.MIN_TECH_DISCOUNT || '40', 10),
   dealsPerRun: parseInt(
@@ -319,6 +322,97 @@ async function broadcastToTelegram(deal, copy) {
   }
 }
 
+
+async function publishToBlogger(deal) {
+  if (!CONFIG.bloggerWebhookUrl && !CONFIG.bloggerToken) {
+    console.log('ℹ️ Neither Blogger Webhook nor OAuth Token configured. Skipping Blogger post.');
+    return false;
+  }
+
+  const title = `${deal.discount} OFF: ${deal.title.slice(0, 65)} (Deal Alert)`;
+  const htmlContent = `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #222; max-width: 780px; margin: 0 auto; padding: 12px;">
+  <h2 style="color: #1e293b;">🔥 ${deal.discount} OFF: ${deal.title}</h2>
+  <div style="text-align: center; margin: 24px 0;">
+    <img src="${deal.imageUrl}" alt="${deal.title}" style="max-width: 100%; max-height: 480px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);" />
+  </div>
+  <div style="background: #f8fafc; border-left: 4px solid #10B981; padding: 16px; margin: 20px 0; border-radius: 6px;">
+    <p style="margin: 0; font-size: 18px; font-weight: bold;">
+      Deal Price: <span style="color: #10B981;">${deal.price}</span>
+      ${deal.mrp ? `<span style="text-decoration: line-through; color: #94a3b8; margin-left: 10px; font-size: 14px;">MRP: ${deal.mrp}</span>` : ''}
+      <span style="background: #FEF3C7; color: #D97706; padding: 3px 8px; border-radius: 4px; font-size: 13px; margin-left: 10px;">${deal.discount} OFF</span>
+    </p>
+  </div>
+  <h3 style="color: #334155;">Verified Deal Highlights:</h3>
+  <ul>
+    <li>Top verified seller on Amazon India</li>
+    <li>Prime delivery eligible</li>
+    <li>Authentic brand warranty included</li>
+  </ul>
+  <div style="text-align: center; margin: 32px 0;">
+    <a href="${deal.affiliateUrl}" target="_blank" rel="noopener sponsored" style="background: #E11D48; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: bold; font-size: 16px; border-radius: 8px; display: inline-block;">👉 VIEW DEAL ON AMAZON &rarr;</a>
+  </div>
+</div>`;
+
+  // Priority 1: Google Apps Script Webhook (Never Expires!)
+  if (CONFIG.bloggerWebhookUrl) {
+    try {
+      console.log('🌐 Publishing to Blogger via Apps Script Webhook...');
+      const response = await fetch(CONFIG.bloggerWebhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          blogId: CONFIG.bloggerBlogId,
+          title,
+          content: htmlContent,
+          labels: [deal.category, 'Amazon Deals', 'Price Drop'],
+        }),
+        redirect: 'follow',
+      });
+
+      const text = await response.text();
+      if (text.includes('Sign in - Google Accounts') || response.status === 401) {
+        console.warn('⚠️ Blogger Webhook returned Google sign-in challenge. Set "Who has access" to "Anyone" in Apps Script.');
+        return false;
+      }
+
+      console.log('✅ Successfully published deal to Blogger via Webhook!');
+      return true;
+    } catch (e) {
+      console.warn('⚠️ Webhook publishing failed:', e.message);
+    }
+  }
+
+  // Priority 2: Google Blogger OAuth v3
+  if (CONFIG.bloggerBlogId && CONFIG.bloggerToken) {
+    try {
+      console.log('🌐 Publishing to Blogger via OAuth v3 API...');
+      const response = await fetch(`https://www.googleapis.com/blogger/v3/blogs/${CONFIG.bloggerBlogId}/posts/`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${CONFIG.bloggerToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          kind: 'blogger#post',
+          title,
+          content: htmlContent,
+          labels: [deal.category, 'Amazon Deals'],
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`✅ Published to Blogger via OAuth v3! URL: ${data.url}`);
+        return true;
+      }
+      console.warn('⚠️ Blogger OAuth publish status:', response.status);
+    } catch (e) {
+      console.warn('⚠️ Blogger OAuth publish error:', e.message);
+    }
+  }
+
+  return false;
+}
+
 function shuffle(array) {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
@@ -427,6 +521,7 @@ async function runAutopilot() {
 
     console.log('\n📡 Broadcasting Deal to Channels...');
     await broadcastToTelegram(deal, copy);
+    await publishToBlogger(deal);
 
     // Save to cache so this ASIN is never syndicated again
     savePostedAsin(deal.asin, deal.title, deal.price, deal.category);
