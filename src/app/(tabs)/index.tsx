@@ -66,6 +66,8 @@ export default function GeneratorScreen() {
   } = useAppStore();
 
   const [isHunting, setIsHunting] = useState(false);
+  const [isPublishingBlogger, setIsPublishingBlogger] = useState(false);
+  const [bloggerPublishSuccessUrl, setBloggerPublishSuccessUrl] = useState<string | null>(null);
   const sessionHuntedAsinsRef = useRef<Set<string>>(new Set());
 
   // Synchronize customizer fields when activeProduct changes
@@ -128,6 +130,7 @@ export default function GeneratorScreen() {
       setCustomDiscount(product.discountPercent || '40% OFF');
       setCustomImageUrl(product.imageUrl);
       setActiveProduct(product);
+      setBloggerPublishSuccessUrl(null);
 
       setStatusMessage('Generating promotional copy for all 5 platforms...');
       const gemini = new GeminiAiService(settings.geminiApiKey);
@@ -986,64 +989,86 @@ export default function GeneratorScreen() {
             </View>
           )}
 
-          {/* Destination 4: Google Blogger (Blogspot 1200+ Word Review) */}
+                    {/* Destination 4: Google Blogger (Blogspot 1-Tap Publishing) */}
           {(activeChannelTab === 'all' || activeChannelTab === 'blogger') && (
             <View style={styles.channelCard}>
               <View style={styles.channelCardHeader}>
                 <View style={styles.channelTitleRow}>
-                  <Ionicons name="newspaper-outline" size={18} color={theme.colors.blogger} />
-                  <Text style={styles.channelTitle}>1200+ Word SEO Review Article</Text>
+                  <Ionicons name="globe-outline" size={18} color={theme.colors.blogger} />
+                  <Text style={styles.channelTitle}>Google Blogger (Blogspot)</Text>
                 </View>
-                <View style={styles.badgePill}>
-                  <Text style={styles.badgePillText}>HTML + IMAGES</Text>
+                <View style={[styles.badgePill, { backgroundColor: 'rgba(245, 125, 0, 0.15)', borderColor: 'rgba(245, 125, 0, 0.3)' }]}>
+                  <Text style={[styles.badgePillText, { color: theme.colors.blogger }]}>1-TAP PUBLISH</Text>
                 </View>
               </View>
               <Text style={styles.previewArticleTitle}>{activeContent.bloggerTitle}</Text>
 
               <View style={styles.bloggerActionCol}>
+                {/* 1-Tap Direct Publish to Blogger */}
                 <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: theme.colors.blogger }]}
-                  onPress={() =>
-                    handleCopyText(
-                      activeContent.bloggerHtmlBody || '',
-                      'bloggerHtml',
-                      'Complete SEO Review HTML copied to clipboard!'
-                    )
-                  }
+                  style={[styles.bloggerPublishBtn, isPublishingBlogger && styles.buttonDisabled]}
+                  onPress={handlePublishBlogger}
+                  disabled={isPublishingBlogger}
                   activeOpacity={0.85}
                 >
-                  <Ionicons
-                    name={copiedKey === 'bloggerHtml' ? 'checkmark' : 'copy-outline'}
-                    size={18}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.actionBtnText}>
-                    {copiedKey === 'bloggerHtml' ? 'HTML Copied to Clipboard!' : 'Copy SEO Article (HTML)'}
-                  </Text>
+                  {isPublishingBlogger ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <View style={styles.bloggerPublishBtnInner}>
+                      <Ionicons name="cloud-upload" size={16} color="#FFFFFF" />
+                      <Text style={styles.bloggerPublishBtnText}>
+                        {bloggerPublishSuccessUrl
+                          ? 'Published! Tap to Re-publish'
+                          : 'Publish Directly to Blogger (1-Tap)'}
+                      </Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
 
-                <View style={[styles.dualActionRow, { marginTop: 8 }]}>
+                {bloggerPublishSuccessUrl && (
+                  <TouchableOpacity
+                    style={styles.bloggerSuccessPill}
+                    onPress={() => Linking.openURL(bloggerPublishSuccessUrl)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="checkmark-circle" size={14} color={theme.colors.accentDeal} />
+                    <Text style={styles.bloggerSuccessText} numberOfLines={1}>
+                      Live: {bloggerPublishSuccessUrl}
+                    </Text>
+                    <Ionicons name="open-outline" size={12} color={theme.colors.accentDeal} />
+                  </TouchableOpacity>
+                )}
+
+                {/* Secondary Actions: Copy HTML & Open Dashboard */}
+                <View style={styles.dualActionRow}>
+                  <TouchableOpacity
+                    style={[styles.secondaryActionBtn, { flex: 1 }]}
+                    onPress={() =>
+                      handleCopyText(
+                        activeContent.bloggerHtmlBody || '',
+                        'bloggerHtml',
+                        'Complete SEO Review HTML copied to clipboard!'
+                      )
+                    }
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={copiedKey === 'bloggerHtml' ? 'checkmark' : 'copy-outline'}
+                      size={14}
+                      color={theme.colors.primaryLight}
+                    />
+                    <Text style={styles.secondaryActionBtnText}>
+                      {copiedKey === 'bloggerHtml' ? 'HTML Copied' : 'Copy HTML'}
+                    </Text>
+                  </TouchableOpacity>
+
                   <TouchableOpacity
                     style={[styles.secondaryActionBtn, { flex: 1 }]}
                     onPress={handleOpenBloggerEditor}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="open-outline" size={15} color={theme.colors.blogger} />
-                    <Text style={styles.secondaryActionBtnText}>Open Blogger Editor</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.secondaryActionBtn, { flex: 1 }]}
-                    onPress={() =>
-                      handleShareSystem(
-                        `${activeContent.bloggerTitle}\n\n${activeContent.bloggerHtmlBody}`,
-                        'Blogspot Review Article'
-                      )
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="share-outline" size={15} color={theme.colors.blogger} />
-                    <Text style={styles.secondaryActionBtnText}>Share to Any App</Text>
+                    <Ionicons name="open-outline" size={14} color={theme.colors.primaryLight} />
+                    <Text style={styles.secondaryActionBtnText}>Dashboard</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -1053,19 +1078,8 @@ export default function GeneratorScreen() {
                     onPress={handlePublishViaEmail}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="mail-outline" size={16} color={theme.colors.accentDeal} />
-                    <Text style={styles.secondaryActionBtnText}>Send Post via Email (Zero-OAuth)</Text>
-                  </TouchableOpacity>
-                ) : null}
-
-                {settings.bloggerAccessToken ? (
-                  <TouchableOpacity
-                    style={[styles.secondaryActionBtn, { marginTop: 8 }]}
-                    onPress={handlePublishBlogger}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="cloud-upload-outline" size={16} color={theme.colors.blogger} />
-                    <Text style={styles.secondaryActionBtnText}>Direct API Publish</Text>
+                    <Ionicons name="mail-outline" size={14} color={theme.colors.textMuted} />
+                    <Text style={styles.secondaryActionBtnText}>Send Post via Email</Text>
                   </TouchableOpacity>
                 ) : null}
               </View>
@@ -1701,6 +1715,51 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  bloggerPublishBtn: {
+    backgroundColor: '#EA580C',
+    borderRadius: theme.radii.md,
+    borderCurve: 'continuous',
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    shadowColor: '#EA580C',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  bloggerPublishBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bloggerPublishBtnText: {
+    color: '#FFFFFF',
+    fontSize: theme.typography.sizes.xs,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  bloggerSuccessPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.colors.accentDealGlow,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderRadius: theme.radii.sm,
+    borderCurve: 'continuous',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 8,
+  },
+  bloggerSuccessText: {
+    color: theme.colors.accentDeal,
+    fontSize: 11,
+    fontWeight: '600',
+    flex: 1,
   },
   bloggerActionCol: {
     gap: 4,
