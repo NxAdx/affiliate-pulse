@@ -75,7 +75,7 @@ export interface AppSettings {
   flipkartAffiliateTag: string;
   earnkaroToken: string;
   bloggerBlogId: string;
-  bloggerAccessToken: string;
+  bloggerAccessToken?: string;
   bloggerWebhookUrl?: string;
   bloggerEmail?: string;
   telegramBotToken: string;

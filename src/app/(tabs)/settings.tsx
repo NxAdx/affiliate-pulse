@@ -13,11 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAppStore } from '../../store/useAppStore';
 import { theme } from '../../theme';
-import { BloggerService } from '../../services/bloggerApi';
+import { BloggerService, DEFAULT_BLOGGER_WEBHOOK } from '../../services/bloggerApi';
 import { TelegramService } from '../../services/telegramBot';
-
-const DEFAULT_WEBHOOK =
-  'https://script.google.com/macros/s/AKfycbxh1BaXpDleljcWtTW_WSTtO-ks7UfQYQ78TkLVnYbpdgW15EiB5RycAIhgruAiRZPQ/exec';
 
 interface PortalLinkProps {
   label: string;
@@ -50,12 +47,9 @@ export default function SettingsScreen() {
   const [flipkartTag, setFlipkartTag] = useState(settings.flipkartAffiliateTag);
   const [earnkaroToken, setEarnkaroToken] = useState(settings.earnkaroToken);
   const [bloggerBlogId, setBloggerBlogId] = useState(settings.bloggerBlogId);
-  const [bloggerToken, setBloggerToken] = useState(settings.bloggerAccessToken);
-  const [bloggerEmail, setBloggerEmail] = useState(settings.bloggerEmail || '');
   const [bloggerWebhookUrl, setBloggerWebhookUrl] = useState(
-    settings.bloggerWebhookUrl?.trim() || DEFAULT_WEBHOOK
+    settings.bloggerWebhookUrl?.trim() || DEFAULT_BLOGGER_WEBHOOK
   );
-  const [showLegacyBlogger, setShowLegacyBlogger] = useState(false);
 
   const [telegramToken, setTelegramToken] = useState(settings.telegramBotToken);
   const [telegramChannel, setTelegramChannel] = useState(settings.telegramChannelId);
@@ -80,9 +74,7 @@ export default function SettingsScreen() {
     setFlipkartTag(settings.flipkartAffiliateTag);
     setEarnkaroToken(settings.earnkaroToken);
     setBloggerBlogId(settings.bloggerBlogId);
-    setBloggerToken(settings.bloggerAccessToken);
-    setBloggerEmail(settings.bloggerEmail || '');
-    setBloggerWebhookUrl(settings.bloggerWebhookUrl?.trim() || DEFAULT_WEBHOOK);
+    setBloggerWebhookUrl(settings.bloggerWebhookUrl?.trim() || DEFAULT_BLOGGER_WEBHOOK);
     setTelegramToken(settings.telegramBotToken);
     setTelegramChannel(settings.telegramChannelId);
   }, [settings]);
@@ -95,9 +87,7 @@ export default function SettingsScreen() {
       flipkartAffiliateTag: flipkartTag.trim(),
       earnkaroToken: earnkaroToken.trim(),
       bloggerBlogId: bloggerBlogId.trim(),
-      bloggerAccessToken: bloggerToken.trim(),
-      bloggerEmail: bloggerEmail.trim(),
-      bloggerWebhookUrl: bloggerWebhookUrl.trim() || DEFAULT_WEBHOOK,
+      bloggerWebhookUrl: bloggerWebhookUrl.trim() || DEFAULT_BLOGGER_WEBHOOK,
       telegramBotToken: telegramToken.trim(),
       telegramChannelId: telegramChannel.trim(),
     });
@@ -110,8 +100,8 @@ export default function SettingsScreen() {
     setIsTestingBlogger(true);
     setBloggerTestResult(null);
     try {
-      const activeWebhook = bloggerWebhookUrl.trim() || DEFAULT_WEBHOOK;
-      const res = await BloggerService.testConnection(bloggerBlogId, bloggerToken, activeWebhook);
+      const activeWebhook = bloggerWebhookUrl.trim() || DEFAULT_BLOGGER_WEBHOOK;
+      const res = await BloggerService.testConnection(bloggerBlogId, activeWebhook);
       if (res.success) {
         setBloggerTestResult({
           success: true,
@@ -272,7 +262,7 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* SECTION 3: Google Blogger (Blogspot) */}
+      {/* SECTION 3: Google Blogger (Direct Apps Script Webhook) */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleRow}>
@@ -282,7 +272,7 @@ export default function SettingsScreen() {
           <PortalLink label="Admin ↗" url="https://www.blogger.com/" />
         </View>
 
-        {/* 1. Google Apps Script Webhook (Primary Method - Permanent 1-Tap) */}
+        {/* 1. Google Apps Script Webhook (Direct & Permanent 1-Tap) */}
         <View style={styles.inputGroup}>
           <View style={styles.labelRow}>
             <Text style={styles.label} numberOfLines={1}>Publishing Webhook</Text>
@@ -352,66 +342,6 @@ export default function SettingsScreen() {
               color={bloggerTestResult.success ? theme.colors.accentDeal : '#EF4444'}
             />
             <Text style={styles.testResultText}>{bloggerTestResult.message}</Text>
-          </View>
-        )}
-
-        {/* Collapsible Legacy OAuth & Email Drawer */}
-        <TouchableOpacity
-          style={styles.accordionToggle}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setShowLegacyBlogger(!showLegacyBlogger);
-          }}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.accordionToggleText}>
-            {showLegacyBlogger ? 'Hide Legacy OAuth & Email' : 'Legacy OAuth & Email Options'}
-          </Text>
-          <Ionicons
-            name={showLegacyBlogger ? 'chevron-up' : 'chevron-down'}
-            size={13}
-            color={theme.colors.textMuted}
-          />
-        </TouchableOpacity>
-
-        {showLegacyBlogger && (
-          <View style={styles.legacyBox}>
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.label} numberOfLines={1}>OAuth Access Token</Text>
-                <PortalLink label="OAuth ↗" url="https://developers.google.com/oauthplayground/" />
-              </View>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="lock-closed-outline" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.inputWithIcon}
-                  placeholder="Paste ya29... token"
-                  placeholderTextColor={theme.colors.textMuted}
-                  value={bloggerToken}
-                  onChangeText={setBloggerToken}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  secureTextEntry
-                />
-              </View>
-              <Text style={styles.helperText}>Requires refreshing every 60 minutes.</Text>
-            </View>
-
-            <View style={[styles.inputGroup, { marginBottom: 0 }]}>
-              <Text style={styles.label}>Post-by-Email Address</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="mail-outline" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.inputWithIcon}
-                  placeholder="yourblog.secretword@blogger.com"
-                  placeholderTextColor={theme.colors.textMuted}
-                  value={bloggerEmail}
-                  onChangeText={setBloggerEmail}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-            </View>
           </View>
         )}
       </View>
@@ -715,30 +645,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     flex: 1,
-  },
-  accordionToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: theme.colors.background,
-    borderRadius: theme.radii.sm,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
-    marginTop: 6,
-  },
-  accordionToggleText: {
-    color: theme.colors.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  legacyBox: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.borderSubtle,
   },
   saveButton: {
     flexDirection: 'row',

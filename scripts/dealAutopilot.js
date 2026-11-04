@@ -21,7 +21,6 @@ const CONFIG = {
   telegramChannel: process.env.TELEGRAM_CHANNEL_ID || '',
   amazonTag: process.env.AMAZON_ASSOCIATE_TAG || 'dealhunter-21',
   bloggerBlogId: process.env.BLOGGER_BLOG_ID || '',
-  bloggerToken: process.env.BLOGGER_ACCESS_TOKEN || '',
   bloggerWebhookUrl:
     process.env.BLOGGER_WEBHOOK_URL ||
     'https://script.google.com/macros/s/AKfycbxh1BaXpDleljcWtTW_WSTtO-ks7UfQYQ78TkLVnYbpdgW15EiB5RycAIhgruAiRZPQ/exec',
@@ -381,35 +380,6 @@ async function publishToBlogger(deal) {
       console.warn('⚠️ Webhook publishing failed:', e.message);
     }
   }
-
-  // Priority 2: Google Blogger OAuth v3
-  if (CONFIG.bloggerBlogId && CONFIG.bloggerToken) {
-    try {
-      console.log('🌐 Publishing to Blogger via OAuth v3 API...');
-      const response = await fetch(`https://www.googleapis.com/blogger/v3/blogs/${CONFIG.bloggerBlogId}/posts/`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${CONFIG.bloggerToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          kind: 'blogger#post',
-          title,
-          content: htmlContent,
-          labels: [deal.category, 'Amazon Deals'],
-        }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        console.log(`✅ Published to Blogger via OAuth v3! URL: ${data.url}`);
-        return true;
-      }
-      console.warn('⚠️ Blogger OAuth publish status:', response.status);
-    } catch (e) {
-      console.warn('⚠️ Blogger OAuth publish error:', e.message);
-    }
-  }
-
   return false;
 }
 

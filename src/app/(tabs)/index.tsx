@@ -337,36 +337,35 @@ export default function GeneratorScreen() {
 
   const handlePublishBlogger = async () => {
     if (!activeContent?.bloggerHtmlBody || !activeContent.bloggerTitle) return;
-    setStatusMessage('Publishing to Blogger...');
-    const result = await BloggerService.publishPost(
-      settings.bloggerBlogId,
-      settings.bloggerAccessToken,
-      {
-        title: activeContent.bloggerTitle,
-        content: activeContent.bloggerHtmlBody,
-      },
-      settings.bloggerWebhookUrl
-    );
-    if (result.success) {
-      setStatusMessage(`Published to Blogger: ${result.url || 'Live'}`);
-    } else {
-      setStatusMessage(`Blogger: ${result.error}`);
+    setIsPublishingBlogger(true);
+    setStatusMessage('Publishing to Blogger via Webhook...');
+    try {
+      const result = await BloggerService.publishPost(
+        settings.bloggerBlogId,
+        {
+          title: activeContent.bloggerTitle,
+          content: activeContent.bloggerHtmlBody,
+        },
+        settings.bloggerWebhookUrl
+      );
+      if (result.success) {
+        setBloggerPublishSuccessUrl(result.url || null);
+        setStatusMessage('Successfully published to Blogger!');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        setStatusMessage(`Blogger: ${result.error || 'Failed to publish'}`);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    } catch (e: any) {
+      setStatusMessage(`Blogger error: ${e?.message || 'Publishing failed'}`);
+    } finally {
+      setIsPublishingBlogger(false);
     }
   };
 
   const handleOpenBloggerEditor = () => {
     const url = BloggerService.getWebEditorUrl(settings.bloggerBlogId);
     Linking.openURL(url);
-  };
-
-  const handlePublishViaEmail = () => {
-    if (!settings.bloggerEmail || !activeContent?.bloggerHtmlBody) return;
-    const mailto = `mailto:${settings.bloggerEmail}?subject=${encodeURIComponent(
-      activeContent.bloggerTitle || 'Product Review'
-    )}&body=${encodeURIComponent(activeContent.bloggerHtmlBody)}`;
-    Linking.openURL(mailto).catch(() => {
-      setStatusMessage('Could not launch email client');
-    });
   };
 
   const handleBroadcastTelegram = async () => {
@@ -1072,16 +1071,7 @@ export default function GeneratorScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {settings.bloggerEmail ? (
-                  <TouchableOpacity
-                    style={[styles.secondaryActionBtn, { marginTop: 8 }]}
-                    onPress={handlePublishViaEmail}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="mail-outline" size={14} color={theme.colors.textMuted} />
-                    <Text style={styles.secondaryActionBtnText}>Send Post via Email</Text>
-                  </TouchableOpacity>
-                ) : null}
+                
               </View>
             </View>
           )}

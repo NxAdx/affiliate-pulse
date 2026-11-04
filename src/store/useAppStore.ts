@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import { MMKV } from 'react-native-mmkv';
 import { AppSettings, DealCategory, DealRecord, ProductMetadata, GeneratedContent } from '../types';
+import { DEFAULT_BLOGGER_WEBHOOK } from '../services/bloggerApi';
 
 let mmkvInstance: MMKV | null = null;
 try {
@@ -68,7 +69,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   earnkaroToken: '',
   bloggerBlogId: '',
   bloggerAccessToken: '',
-  bloggerWebhookUrl: 'https://script.google.com/macros/s/AKfycbxh1BaXpDleljcWtTW_WSTtO-ks7UfQYQ78TkLVnYbpdgW15EiB5RycAIhgruAiRZPQ/exec',
+  bloggerWebhookUrl: DEFAULT_BLOGGER_WEBHOOK,
   bloggerEmail: '',
   telegramBotToken: '',
   telegramChannelId: '',
