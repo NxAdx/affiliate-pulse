@@ -1,4 +1,12 @@
-export type DealCategory = 'electronics' | 'fashion' | 'general';
+export type DealCategory =
+  | 'all'
+  | 'electronics'
+  | 'fashion'
+  | 'home'
+  | 'beauty'
+  | 'fitness'
+  | 'books'
+  | 'general';
 
 export interface ProductMetadata {
   originalUrl: string;
@@ -22,14 +30,20 @@ export interface ProductMetadata {
 
 export interface GeneratedContent {
   category: DealCategory;
-  // Funnel A: Electronics
+  // Channel 1: Google Blogger (In-depth 1200+ word SEO Review)
   bloggerTitle?: string;
   bloggerHtmlBody?: string;
+  
+  // Channel 2: Telegram Deal Channel
   telegramMarkdown?: string;
+  
+  // Channel 3: WhatsApp Channel / Direct Message
   whatsappMessage?: string;
+  
+  // Channel 4: Twitter / X
   tweetText?: string;
   
-  // Funnel B: Fashion
+  // Channel 5: Pinterest 2:3 Pin Studio & Social Graphic (Universal for all products)
   pinterestTitle?: string;
   pinterestDescription?: string;
   pinterestTags?: string[];

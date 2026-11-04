@@ -175,7 +175,19 @@ export default function HistoryScreen() {
                           },
                         ]}
                       >
-                        {item.category === 'fashion' ? '👔 FASHION PIN' : '⚡ TECH DEAL'}
+                        {item.category === 'fashion'
+                          ? '👔 FASHION'
+                          : item.category === 'electronics'
+                          ? '⚡ TECH'
+                          : item.category === 'home'
+                          ? '🏠 HOME'
+                          : item.category === 'beauty'
+                          ? '✨ BEAUTY'
+                          : item.category === 'fitness'
+                          ? '🏋️ FITNESS'
+                          : item.category === 'books'
+                          ? '📚 BOOKS'
+                          : '🛍️ DEAL'}
                       </Text>
                     </View>
 

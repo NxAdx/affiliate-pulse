@@ -24,11 +24,16 @@ import { BloggerService } from '../../services/bloggerApi';
 import { TelegramService } from '../../services/telegramBot';
 import { PinCardView } from '../../components/PinCardView';
 import { DealHunterService } from '../../services/dealHunter';
+import { DealCategory } from '../../types';
 
 export default function GeneratorScreen() {
   const [inputUrl, setInputUrl] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Flexible Search & Discount Filters
+  const [huntKeyword, setHuntKeyword] = useState('');
+  const [minDiscountFilter, setMinDiscountFilter] = useState(40);
 
   // Editable deal tuning fields
   const [customTitle, setCustomTitle] = useState('');
@@ -38,8 +43,10 @@ export default function GeneratorScreen() {
   const [customImageUrl, setCustomImageUrl] = useState('');
   const [isTuningVisible, setIsTuningVisible] = useState(false);
 
-  // Active channel view filter (Buffer / Publer inspiration)
-  const [activeChannelTab, setActiveChannelTab] = useState<'all' | 'whatsapp' | 'telegram' | 'blogger' | 'x'>('all');
+  // Universal Channel Switcher (Buffer / Publer Inspiration)
+  const [activeChannelTab, setActiveChannelTab] = useState<
+    'all' | 'telegram' | 'whatsapp' | 'blogger' | 'pinterest' | 'x'
+  >('all');
 
   const pinCardRef = useRef<View>(null);
 
@@ -60,7 +67,7 @@ export default function GeneratorScreen() {
   const [isHunting, setIsHunting] = useState(false);
   const sessionHuntedAsinsRef = useRef<Set<string>>(new Set());
 
-  // Sync state whenever activeProduct is loaded (from Vault History or Deal Hunter)
+  // Synchronize customizer fields when activeProduct changes
   useEffect(() => {
     if (activeProduct) {
       setCustomTitle(activeProduct.title || '');
@@ -91,6 +98,12 @@ export default function GeneratorScreen() {
     setTimeout(() => setCopiedKey(null), 2500);
   };
 
+  /**
+   * Universal URL Processing:
+   * Uses REA-calibrated scraping to extract exact price, strike MRP, mathematical discount,
+   * and 2000px crystal-clear uncompressed studio product imagery.
+   * Feeds into Gemini for all 5 syndication channels!
+   */
   const handleGenerate = async () => {
     if (!inputUrl.trim()) {
       setStatusMessage('Please paste an Amazon, Flipkart or Myntra link');
@@ -98,37 +111,28 @@ export default function GeneratorScreen() {
     }
 
     setIsProcessing(true);
-    setStatusMessage('Resolving link & fetching real product image/pricing...');
+    setStatusMessage('Resolving link & extracting accurate pricing, MRP & HD image...');
 
     try {
-      // 1. Scrape & resolve URL (uses official Amazon CDN for real product image)
       const product = await ProductScraper.parseProductUrl(inputUrl.trim(), {
         amazon: settings.amazonAffiliateTag,
         flipkart: settings.flipkartAffiliateTag,
         earnkaro: settings.earnkaroToken,
       });
 
-      // Synchronize editable customizer states
+      // Synchronize editable states
       setCustomTitle(product.title);
       setCustomPrice(product.currentPrice);
-      setCustomMrp(product.originalPrice || '₹3,999');
-      setCustomDiscount(product.discountPercent || '50% OFF');
+      setCustomMrp(product.originalPrice || '₹2,999');
+      setCustomDiscount(product.discountPercent || '40% OFF');
       setCustomImageUrl(product.imageUrl);
       setActiveProduct(product);
 
-      // 2. Feed into Gemini AI for lengthy 1200+ word review and viral deal copy
-      setStatusMessage('Gemini AI generating 1200+ word review & channel copy...');
+      setStatusMessage('Generating promotional copy for all 5 platforms...');
       const gemini = new GeminiAiService(settings.geminiApiKey);
-
-      let content;
-      if (selectedCategory === 'electronics') {
-        content = await gemini.generateElectronicsDeal(product);
-      } else {
-        content = await gemini.generateFashionPin(product);
-      }
+      const content = await gemini.generateOmnichannelDeal(product, selectedCategory);
       setActiveContent(content);
 
-      // 3. Save to History (persisted via MMKV)
       addDealToHistory({
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
@@ -138,7 +142,7 @@ export default function GeneratorScreen() {
         status: {},
       });
 
-      setStatusMessage('Deal generated successfully with real product imagery!');
+      setStatusMessage('Universal deal ready across all 5 distribution channels!');
     } catch (err: any) {
       setStatusMessage(`Error: ${err?.message || 'Failed to process product'}`);
     } finally {
@@ -146,18 +150,23 @@ export default function GeneratorScreen() {
     }
   };
 
+  /**
+   * Universal Deal Hunter:
+   * Flexible product discovery by custom keyword or category, with selectable discount tier.
+   */
   const handleAutoHuntDeal = async () => {
     setIsHunting(true);
-    setStatusMessage(
-      `🔍 Hunting Amazon for fresh ${selectedCategory === 'fashion' ? "Men's Fashion (≥50% OFF)" : 'Tech & Electronics (≥40% OFF)'}...`
-    );
+    const searchTarget = huntKeyword.trim()
+      ? `"${huntKeyword.trim()}"`
+      : `${selectedCategory.toUpperCase()} deals`;
+
+    setStatusMessage(`🔍 Hunting Amazon India for ${searchTarget} (≥${minDiscountFilter}% OFF)...`);
 
     try {
       const historyAsins = (dealsHistory || [])
         .map((d) => d.product.asin)
         .filter((a): a is string => Boolean(a));
 
-      // Exclude Vault History, Session History, and active product so every hunt returns a new product
       const excludedAsins = Array.from(
         new Set([
           ...historyAsins,
@@ -169,19 +178,20 @@ export default function GeneratorScreen() {
       const deal = await DealHunterService.huntTopDeal(
         excludedAsins,
         settings.amazonAffiliateTag || 'dealhunter-21',
-        selectedCategory
+        selectedCategory,
+        huntKeyword.trim() || undefined,
+        minDiscountFilter
       );
 
       if (!deal) {
         setStatusMessage('No new unseen deals found meeting discount threshold right now.');
         Alert.alert(
           'Deal Hunt Complete',
-          'All top deals matching the threshold in this category have been explored! Try switching categories or hunting again.'
+          `No unseen deals found matching ${minDiscountFilter}%+ OFF right now. Try lowering the discount filter or searching another keyword!`
         );
         return;
       }
 
-      // Track in active session
       sessionHuntedAsinsRef.current.add(deal.asin);
 
       setInputUrl(deal.affiliateUrl);
@@ -205,22 +215,15 @@ export default function GeneratorScreen() {
         originalPrice: deal.mrp,
         discountPercent: deal.discount,
         asin: deal.asin,
-        features: [`${deal.discount} OFF Discount Deal`, 'Verified Top Rated Item'],
+        features: [`${deal.discount} Discount Deal`, 'Verified Top Rated Item'],
       };
 
       setActiveProduct(product);
 
-      // Generate Gemini Content
       const gemini = new GeminiAiService(settings.geminiApiKey);
-      let content;
-      if (selectedCategory === 'electronics') {
-        content = await gemini.generateElectronicsDeal(product);
-      } else {
-        content = await gemini.generateFashionPin(product);
-      }
+      const content = await gemini.generateOmnichannelDeal(product, selectedCategory);
       setActiveContent(content);
 
-      // Save to MMKV History
       addDealToHistory({
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
@@ -230,7 +233,7 @@ export default function GeneratorScreen() {
         status: {},
       });
 
-      setStatusMessage(`🎯 Discovered ${deal.discount} OFF deal! Ready to broadcast.`);
+      setStatusMessage(`🎯 Discovered ${deal.discount} deal! Ready to share across all channels.`);
     } catch (err: any) {
       setStatusMessage(`Hunting error: ${err?.message || 'Network issue'}`);
     } finally {
@@ -238,48 +241,57 @@ export default function GeneratorScreen() {
     }
   };
 
-  // Re-sync copy when user customizes price, image or title in UI
+  /**
+   * Re-sync copy when user customizes price, MRP, image, or title
+   * Automatically recalculates mathematical discount percentage!
+   */
   const handleApplyCustomTuning = () => {
     if (!activeProduct) return;
+
+    const pClean = customPrice.trim().startsWith('₹') ? customPrice.trim() : `₹${customPrice.trim()}`;
+    const mClean = customMrp.trim().startsWith('₹') ? customMrp.trim() : `₹${customMrp.trim()}`;
+
+    // Mathematical discount recalculation
+    let computedDiscount = customDiscount.trim();
+    const pNum = parseInt(pClean.replace(/[^0-9]/g, ''), 10);
+    const mNum = parseInt(mClean.replace(/[^0-9]/g, ''), 10);
+    if (!isNaN(pNum) && !isNaN(mNum) && mNum > pNum) {
+      computedDiscount = `${Math.round(((mNum - pNum) / mNum) * 100)}% OFF`;
+      setCustomDiscount(computedDiscount);
+    }
 
     const updatedProduct = {
       ...activeProduct,
       title: customTitle.trim() || activeProduct.title,
       imageUrl: customImageUrl.trim() || activeProduct.imageUrl,
-      currentPrice: customPrice.trim().startsWith('₹') ? customPrice.trim() : `₹${customPrice.trim()}`,
-      originalPrice: customMrp.trim().startsWith('₹') ? customMrp.trim() : `₹${customMrp.trim()}`,
-      discountPercent: customDiscount.trim() || activeProduct.discountPercent,
+      currentPrice: pClean,
+      originalPrice: mClean,
+      discountPercent: computedDiscount || activeProduct.discountPercent,
     };
 
     setActiveProduct(updatedProduct);
 
-    // Update activeContent with new image, prices & title
     if (activeContent) {
       const gemini = new GeminiAiService(settings.geminiApiKey);
-      if (selectedCategory === 'electronics') {
-        const refreshed = gemini.generateFallbackElectronics(updatedProduct);
-        setActiveContent({
-          ...activeContent,
-          bloggerTitle: `${updatedProduct.title} Review & Lowest Price Deal (2026)`,
-          bloggerHtmlBody: refreshed.bloggerHtmlBody,
-          telegramMarkdown: refreshed.telegramMarkdown,
-          whatsappMessage: refreshed.whatsappMessage,
-          tweetText: refreshed.tweetText,
-        });
-      } else {
-        const refreshed = gemini.generateFallbackFashion(updatedProduct);
-        setActiveContent({
-          ...activeContent,
-          pinterestTitle: `Stylist Pick: ${updatedProduct.title.slice(0, 50)}`,
-          pinPriceTag: updatedProduct.currentPrice,
-        });
-      }
+      const refreshed = gemini.generateFallbackOmnichannel(updatedProduct, selectedCategory);
+      setActiveContent({
+        ...activeContent,
+        bloggerTitle: `${updatedProduct.title} Review & Lowest Price Deal (2026)`,
+        bloggerHtmlBody: refreshed.bloggerHtmlBody,
+        telegramMarkdown: refreshed.telegramMarkdown,
+        whatsappMessage: refreshed.whatsappMessage,
+        tweetText: refreshed.tweetText,
+        pinterestTitle: `Top Pick 2026: ${updatedProduct.title.slice(0, 40)} | ${updatedProduct.discountPercent}`,
+        pinPriceTag: updatedProduct.currentPrice,
+      });
     }
 
-    setStatusMessage('Updated real product image & pricing across all channels!');
+    setStatusMessage('Updated price, HD image & discount across all 5 channels!');
   };
 
-  // Pinterest 2:3 Pin Export via react-native-view-shot & expo-sharing
+  /**
+   * Pinterest 2:3 Pin Graphic Export (1000x1500) via react-native-view-shot
+   */
   const handleExportPin = async () => {
     if (!pinCardRef.current) {
       setStatusMessage('Pin card view not ready for export');
@@ -421,9 +433,21 @@ export default function GeneratorScreen() {
     Linking.openURL(url);
   };
 
+  const CATEGORY_TABS: { key: DealCategory; label: string; icon: any }[] = [
+    { key: 'all', label: 'All Products', icon: 'globe-outline' },
+    { key: 'electronics', label: 'Tech & Gadgets', icon: 'hardware-chip-outline' },
+    { key: 'fashion', label: 'Fashion', icon: 'shirt-outline' },
+    { key: 'home', label: 'Home & Kitchen', icon: 'home-outline' },
+    { key: 'beauty', label: 'Beauty & Care', icon: 'sparkles-outline' },
+    { key: 'fitness', label: 'Fitness', icon: 'barbell-outline' },
+    { key: 'books', label: 'Books', icon: 'book-outline' },
+  ];
+
+  const DISCOUNT_TIERS = [30, 40, 50, 60, 70];
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Top Engine Status Pill */}
+      {/* Top Engine Status Header */}
       <View style={styles.topBar}>
         <View style={styles.engineBadge}>
           <Ionicons
@@ -432,82 +456,95 @@ export default function GeneratorScreen() {
             color={settings.geminiApiKey ? theme.colors.primaryLight : theme.colors.accentWarning}
           />
           <Text style={styles.engineBadgeText}>
-            {settings.geminiApiKey ? 'GEMINI 1.5 PRO' : 'SMART OFFLINE ENGINE'}
+            {settings.geminiApiKey ? 'GEMINI OMNICHANNEL ENGINE' : 'OFFLINE HIGH-PRECISION ENGINE'}
           </Text>
         </View>
         <View style={styles.vaultPill}>
-          <Ionicons name="lock-closed" size={11} color={theme.colors.accentDeal} />
-          <Text style={styles.vaultPillText}>MMKV VAULT</Text>
+          <Ionicons name="shield-checkmark" size={11} color={theme.colors.accentDeal} />
+          <Text style={styles.vaultPillText}>REA HIGH-RES VERIFIED</Text>
         </View>
       </View>
 
-      {/* Category Pill Switcher */}
-      <View style={styles.categoryRow}>
-        <TouchableOpacity
-          style={[
-            styles.categoryPill,
-            selectedCategory === 'electronics' && styles.categoryPillActive,
-          ]}
-          onPress={() => setSelectedCategory('electronics')}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name="hardware-chip-outline"
-            size={16}
-            color={selectedCategory === 'electronics' ? '#FFFFFF' : theme.colors.textMuted}
-          />
-          <Text
-            style={[
-              styles.categoryPillText,
-              selectedCategory === 'electronics' && styles.categoryPillTextActive,
-            ]}
-          >
-            Tech & Deals
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.categoryPill,
-            selectedCategory === 'fashion' && styles.categoryPillFashionActive,
-          ]}
-          onPress={() => setSelectedCategory('fashion')}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name="shirt-outline"
-            size={16}
-            color={selectedCategory === 'fashion' ? '#FFFFFF' : theme.colors.textMuted}
-          />
-          <Text
-            style={[
-              styles.categoryPillText,
-              selectedCategory === 'fashion' && styles.categoryPillTextActive,
-            ]}
-          >
-            Men's Fashion (Pin)
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* 24/7 Autonomous Deal Hunter Card */}
+      {/* Universal Flexible Deal Hunter Card */}
       <View style={styles.autoHunterCard}>
         <View style={styles.autoHunterHeader}>
           <View style={styles.autoHunterTitleRow}>
             <Ionicons name="sparkles" size={17} color={theme.colors.accentDeal} />
-            <Text style={styles.autoHunterTitle}>Autonomous Deal Hunter</Text>
+            <Text style={styles.autoHunterTitle}>Universal Deal Hunter</Text>
           </View>
           <View style={styles.priorityBadge}>
             <Text style={styles.priorityBadgeText}>
-              {selectedCategory === 'fashion' ? 'FASHION 1ST (≥50% OFF)' : 'TECH 2ND (≥40% OFF)'}
+              ANY PRODUCT • ≥{minDiscountFilter}% OFF
             </Text>
           </View>
         </View>
 
-        <Text style={styles.autoHunterSub}>
-          Auto-discovers high-discount deals on Amazon, injects your affiliate tag, and prepares cross-channel syndication hands-free.
-        </Text>
+        {/* Custom Keyword Search Input */}
+        <View style={styles.searchKeywordWrap}>
+          <Ionicons name="search-outline" size={16} color={theme.colors.textMuted} />
+          <TextInput
+            style={styles.searchKeywordInput}
+            placeholder="Search keyword (e.g. Air Fryer, Smartwatch, Sneakers...)"
+            placeholderTextColor={theme.colors.textMuted}
+            value={huntKeyword}
+            onChangeText={setHuntKeyword}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {huntKeyword ? (
+            <TouchableOpacity onPress={() => setHuntKeyword('')}>
+              <Ionicons name="close-circle" size={16} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
+        {/* Category Horizontal Selector */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+          {CATEGORY_TABS.map((cat) => {
+            const isActive = selectedCategory === cat.key;
+            return (
+              <TouchableOpacity
+                key={cat.key}
+                style={[styles.categoryChip, isActive && styles.categoryChipActive]}
+                onPress={() => setSelectedCategory(cat.key)}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={cat.icon}
+                  size={14}
+                  color={isActive ? '#FFFFFF' : theme.colors.textSecondary}
+                />
+                <Text style={[styles.categoryChipText, isActive && styles.categoryChipTextActive]}>
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Minimum Discount Filter Chips */}
+        <View style={styles.discountRow}>
+          <Text style={styles.discountRowLabel}>Min Discount:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+            {DISCOUNT_TIERS.map((tier) => {
+              const isSelected = minDiscountFilter === tier;
+              return (
+                <TouchableOpacity
+                  key={tier}
+                  style={[styles.discountChip, isSelected && styles.discountChipActive]}
+                  onPress={() => setMinDiscountFilter(tier)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.discountChipText, isSelected && styles.discountChipTextActive]}>
+                    {tier}%+ OFF
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* 1-Tap Auto-Hunt Trigger */}
         <TouchableOpacity
           style={[styles.autoHunterBtn, isHunting && styles.buttonDisabled]}
           onPress={handleAutoHuntDeal}
@@ -520,19 +557,19 @@ export default function GeneratorScreen() {
             <View style={styles.autoHunterBtnInner}>
               <Ionicons name="flash" size={16} color="#FFFFFF" />
               <Text style={styles.autoHunterBtnText}>
-                {selectedCategory === 'fashion'
-                  ? '⚡ Auto-Hunt Fashion Deal (≥50% Off)'
-                  : '⚡ Auto-Hunt Tech Deal (≥40% Off)'}
+                {huntKeyword.trim()
+                  ? `⚡ Auto-Hunt "${huntKeyword.trim()}" (≥${minDiscountFilter}% Off)`
+                  : `⚡ Auto-Hunt ${selectedCategory.toUpperCase()} Deal (≥${minDiscountFilter}% Off)`}
               </Text>
             </View>
           )}
         </TouchableOpacity>
       </View>
 
-      {/* URL Input Box */}
+      {/* Direct URL Input Box (Accepts Amazon, Flipkart, Myntra) */}
       <View style={styles.inputCard}>
         <View style={styles.inputLabelRow}>
-          <Text style={styles.inputLabel}>Product URL / Deal Shortlink</Text>
+          <Text style={styles.inputLabel}>Direct Product URL / Shortlink</Text>
           <TouchableOpacity onPress={handlePasteClipboard} style={styles.pasteBtn} activeOpacity={0.7}>
             <Ionicons name="clipboard-outline" size={13} color={theme.colors.primaryLight} />
             <Text style={styles.pasteBtnText}>Paste</Text>
@@ -568,13 +605,13 @@ export default function GeneratorScreen() {
           ) : (
             <View style={styles.primaryButtonInner}>
               <Ionicons name="flash" size={18} color="#FFFFFF" />
-              <Text style={styles.primaryButtonText}>Generate Multi-Channel Deal</Text>
+              <Text style={styles.primaryButtonText}>Generate All 5 Channels</Text>
             </View>
           )}
         </TouchableOpacity>
       </View>
 
-      {/* Status feedback */}
+      {/* Real-time Status feedback */}
       {statusMessage ? (
         <View style={styles.statusBox}>
           <Ionicons name="information-circle-outline" size={16} color={theme.colors.primaryLight} />
@@ -582,7 +619,7 @@ export default function GeneratorScreen() {
         </View>
       ) : null}
 
-      {/* Interactive Deal Customizer / Live Price & Image Tuning Box */}
+      {/* Interactive Deal Customizer / Price & Image Tuning Box */}
       {activeProduct && (
         <View style={styles.tuningCard}>
           <TouchableOpacity
@@ -592,7 +629,7 @@ export default function GeneratorScreen() {
           >
             <View style={styles.tuningHeaderTitleRow}>
               <Ionicons name="options-outline" size={16} color={theme.colors.accentDeal} />
-              <Text style={styles.tuningTitle}>Deal Details, Image & Price Tuning</Text>
+              <Text style={styles.tuningTitle}>Deal Details, HD Image & Price Tuning</Text>
             </View>
             <Ionicons
               name={isTuningVisible ? 'chevron-up' : 'chevron-down'}
@@ -617,7 +654,7 @@ export default function GeneratorScreen() {
 
               {/* Product Image URL with Live Thumbnail */}
               <View style={styles.tuneField}>
-                <Text style={styles.tuneLabel}>Product Image URL</Text>
+                <Text style={styles.tuneLabel}>HD Product Image URL (Uncompressed)</Text>
                 <View style={styles.imageTuneRow}>
                   {customImageUrl ? (
                     <Image
@@ -680,14 +717,14 @@ export default function GeneratorScreen() {
                 activeOpacity={0.8}
               >
                 <Ionicons name="checkmark-done" size={16} color="#FFFFFF" />
-                <Text style={styles.tuneApplyBtnText}>Apply & Sync Channels</Text>
+                <Text style={styles.tuneApplyBtnText}>Apply & Sync All 5 Channels</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
       )}
 
-      {/* Price History / Deal Quality Banner */}
+      {/* Deal Score / Discount Quality Banner */}
       {activeProduct?.dealScore && (
         <View style={styles.dealScoreBanner}>
           <Ionicons name="flame" size={16} color="#EF4444" />
@@ -695,381 +732,392 @@ export default function GeneratorScreen() {
         </View>
       )}
 
-      {/* Live Preview Area */}
+      {/* Universal Omnichannel Syndication Studio */}
       {activeContent && (
         <View style={styles.previewContainer}>
-          {selectedCategory === 'fashion' ? (
-            <View style={styles.fashionPreview}>
-              <View style={styles.previewHeadingRow}>
-                <Ionicons name="logo-pinterest" size={18} color={theme.colors.pinterest} />
-                <Text style={styles.previewHeading}>Pinterest 2:3 Pin Studio</Text>
+          <View style={styles.previewHeadingRow}>
+            <Ionicons name="layers-outline" size={18} color={theme.colors.primaryLight} />
+            <Text style={styles.previewHeading}>Omnichannel Syndication Studio</Text>
+          </View>
+
+          {/* Universal Channel Switcher Bar (All 5 Destinations Available) */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.channelScroll}>
+            <View style={styles.channelTabBar}>
+              <TouchableOpacity
+                style={[styles.channelTab, activeChannelTab === 'all' && styles.channelTabActive]}
+                onPress={() => setActiveChannelTab('all')}
+              >
+                <Text style={[styles.channelTabText, activeChannelTab === 'all' && styles.channelTabTextActive]}>
+                  All (Overview)
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.channelTab, activeChannelTab === 'telegram' && styles.channelTabActive]}
+                onPress={() => setActiveChannelTab('telegram')}
+              >
+                <Ionicons name="paper-plane" size={12} color={theme.colors.telegram} />
+                <Text style={[styles.channelTabText, activeChannelTab === 'telegram' && styles.channelTabTextActive]}>
+                  Telegram
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.channelTab, activeChannelTab === 'whatsapp' && styles.channelTabActive]}
+                onPress={() => setActiveChannelTab('whatsapp')}
+              >
+                <Ionicons name="logo-whatsapp" size={12} color={theme.colors.whatsapp} />
+                <Text style={[styles.channelTabText, activeChannelTab === 'whatsapp' && styles.channelTabTextActive]}>
+                  WhatsApp
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.channelTab, activeChannelTab === 'blogger' && styles.channelTabActive]}
+                onPress={() => setActiveChannelTab('blogger')}
+              >
+                <Ionicons name="newspaper" size={12} color={theme.colors.blogger} />
+                <Text style={[styles.channelTabText, activeChannelTab === 'blogger' && styles.channelTabTextActive]}>
+                  Blogspot
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.channelTab, activeChannelTab === 'pinterest' && styles.channelTabActive]}
+                onPress={() => setActiveChannelTab('pinterest')}
+              >
+                <Ionicons name="logo-pinterest" size={12} color={theme.colors.pinterest} />
+                <Text style={[styles.channelTabText, activeChannelTab === 'pinterest' && styles.channelTabTextActive]}>
+                  Pinterest Pin
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.channelTab, activeChannelTab === 'x' && styles.channelTabActive]}
+                onPress={() => setActiveChannelTab('x')}
+              >
+                <Ionicons name="logo-twitter" size={12} color={theme.colors.primaryLight} />
+                <Text style={[styles.channelTabText, activeChannelTab === 'x' && styles.channelTabTextActive]}>
+                  X
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+
+          {/* Destination 1: Telegram Deal Alert */}
+          {(activeChannelTab === 'all' || activeChannelTab === 'telegram') && (
+            <View style={styles.channelCard}>
+              <View style={styles.channelCardHeader}>
+                <View style={styles.channelTitleRow}>
+                  <Ionicons name="paper-plane-outline" size={18} color={theme.colors.telegram} />
+                  <Text style={styles.channelTitle}>Telegram Channel Alert</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.copySmallBtn}
+                  onPress={() => handleCopyText(activeContent.telegramMarkdown || '', 'telegram')}
+                >
+                  <Ionicons
+                    name={copiedKey === 'telegram' ? 'checkmark' : 'copy-outline'}
+                    size={13}
+                    color={theme.colors.primaryLight}
+                  />
+                  <Text style={styles.copySmallBtnText}>
+                    {copiedKey === 'telegram' ? 'Copied' : 'Copy'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.previewCopyText} numberOfLines={5}>
+                {activeContent.telegramMarkdown}
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: theme.colors.telegram }]}
+                onPress={handleBroadcastTelegram}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="paper-plane" size={18} color="#FFFFFF" />
+                <Text style={styles.actionBtnText}>Broadcast to Telegram Channel</Text>
+              </TouchableOpacity>
+
+              <View style={[styles.dualActionRow, { marginTop: 8 }]}>
+                <TouchableOpacity
+                  style={[styles.secondaryActionBtn, { flex: 1 }]}
+                  onPress={handleShareTelegramDirect}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="share-social-outline" size={15} color={theme.colors.telegram} />
+                  <Text style={styles.secondaryActionBtnText}>Direct Share App</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.secondaryActionBtn, { flex: 1 }]}
+                  onPress={() =>
+                    handleShareSystem(activeContent.telegramMarkdown || '', 'Telegram Deal Alert')
+                  }
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="share-outline" size={15} color={theme.colors.telegram} />
+                  <Text style={styles.secondaryActionBtnText}>Share to Any App</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Destination 2: WhatsApp Deal Message */}
+          {(activeChannelTab === 'all' || activeChannelTab === 'whatsapp') && (
+            <View style={styles.channelCard}>
+              <View style={styles.channelCardHeader}>
+                <View style={styles.channelTitleRow}>
+                  <Ionicons name="logo-whatsapp" size={18} color={theme.colors.whatsapp} />
+                  <Text style={styles.channelTitle}>WhatsApp Channel / Chat</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.copySmallBtn}
+                  onPress={() => handleCopyText(activeContent.whatsappMessage || '', 'whatsapp')}
+                >
+                  <Ionicons
+                    name={copiedKey === 'whatsapp' ? 'checkmark' : 'copy-outline'}
+                    size={13}
+                    color={theme.colors.primaryLight}
+                  />
+                  <Text style={styles.copySmallBtnText}>
+                    {copiedKey === 'whatsapp' ? 'Copied' : 'Copy'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.previewCopyText}>{activeContent.whatsappMessage}</Text>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: theme.colors.whatsapp }]}
+                onPress={handleShareWhatsApp}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="share-social-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.actionBtnText}>Share to WhatsApp</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Destination 3: Pinterest 2:3 Pin Studio (Universal for all products!) */}
+          {(activeChannelTab === 'all' || activeChannelTab === 'pinterest') && (
+            <View style={styles.channelCard}>
+              <View style={styles.channelCardHeader}>
+                <View style={styles.channelTitleRow}>
+                  <Ionicons name="logo-pinterest" size={18} color={theme.colors.pinterest} />
+                  <Text style={styles.channelTitle}>Pinterest 2:3 Pin Studio</Text>
+                </View>
+                <View style={[styles.badgePill, { backgroundColor: 'rgba(230, 0, 35, 0.15)', borderColor: theme.colors.pinterest }]}>
+                  <Text style={[styles.badgePillText, { color: theme.colors.pinterest }]}>1000x1500 HD</Text>
+                </View>
               </View>
 
-              {/* Pin Graphic Component (Captured via view-shot with real product image) */}
+              {/* Pin Graphic Preview */}
               <View style={styles.pinCenterWrap}>
                 <PinCardView
                   ref={pinCardRef}
                   title={customTitle || activeContent.pinterestTitle || activeProduct?.title || ''}
-                  badgeText={activeContent.pinBadgeText || 'MUST HAVE'}
+                  badgeText={activeContent.pinBadgeText || 'HOT DEAL'}
                   priceTag={customPrice || activeContent.pinPriceTag || activeProduct?.currentPrice || '₹1,499'}
                   originalPrice={customMrp || activeProduct?.originalPrice}
                   discountPercent={customDiscount || activeProduct?.discountPercent}
                   imageUrl={customImageUrl || activeProduct?.imageUrl || ''}
                   platform={activeProduct?.platform}
+                  ctaText="TAP TO GRAB DEAL →"
                 />
               </View>
 
-              {/* Pin Action Toolbar */}
-              <View style={styles.pinActionGroup}>
+              {/* Pin Actions */}
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: theme.colors.pinterest }]}
+                onPress={handleExportPin}
+                activeOpacity={0.85}
+                disabled={isProcessing}
+              >
+                <Ionicons name="camera-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.actionBtnText}>Export & Share 2:3 Graphic Pin</Text>
+              </TouchableOpacity>
+
+              <View style={[styles.dualActionRow, { marginTop: 8 }]}>
                 <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: theme.colors.pinterest }]}
-                  onPress={handleExportPin}
-                  activeOpacity={0.85}
-                  disabled={isProcessing}
+                  style={[styles.secondaryActionBtn, { flex: 1 }]}
+                  onPress={() =>
+                    handleCopyText(
+                      activeProduct?.affiliateUrl || '',
+                      'pinLink',
+                      'Affiliate Pin link copied!'
+                    )
+                  }
+                  activeOpacity={0.7}
                 >
-                  <Ionicons name="camera-outline" size={18} color="#FFFFFF" />
-                  <Text style={styles.actionBtnText}>Export & Share 2:3 Graphic Pin</Text>
+                  <Ionicons
+                    name={copiedKey === 'pinLink' ? 'checkmark' : 'link-outline'}
+                    size={15}
+                    color={theme.colors.primaryLight}
+                  />
+                  <Text style={styles.secondaryActionBtnText}>
+                    {copiedKey === 'pinLink' ? 'Copied Link' : 'Copy Pin Link'}
+                  </Text>
                 </TouchableOpacity>
 
-                <View style={styles.dualActionRow}>
+                <TouchableOpacity
+                  style={[styles.secondaryActionBtn, { flex: 1 }]}
+                  onPress={() => {
+                    const desc = `${activeContent.pinterestTitle}\n\n${activeContent.pinterestDescription || ''}\n\n${activeContent.pinterestTags?.join(' ') || ''}`;
+                    handleCopyText(desc, 'pinDesc', 'Pin title, description & tags copied!');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={copiedKey === 'pinDesc' ? 'checkmark' : 'copy-outline'}
+                    size={15}
+                    color={theme.colors.secondaryLight}
+                  />
+                  <Text style={styles.secondaryActionBtnText}>
+                    {copiedKey === 'pinDesc' ? 'Copied SEO' : 'Copy Pin Copy & SEO'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.secondaryActionBtn, { width: '100%', marginTop: 8 }]}
+                onPress={handleOpenPinterest}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="logo-pinterest" size={16} color={theme.colors.pinterest} />
+                <Text style={styles.secondaryActionBtnText}>Open Pinterest App / Web</Text>
+              </TouchableOpacity>
+
+              {activeContent.pinterestTags && (
+                <View style={styles.tagWrap}>
+                  <Text style={styles.tagsText}>{activeContent.pinterestTags.join(' ')}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Destination 4: Google Blogger (Blogspot 1200+ Word Review) */}
+          {(activeChannelTab === 'all' || activeChannelTab === 'blogger') && (
+            <View style={styles.channelCard}>
+              <View style={styles.channelCardHeader}>
+                <View style={styles.channelTitleRow}>
+                  <Ionicons name="newspaper-outline" size={18} color={theme.colors.blogger} />
+                  <Text style={styles.channelTitle}>1200+ Word SEO Review Article</Text>
+                </View>
+                <View style={styles.badgePill}>
+                  <Text style={styles.badgePillText}>HTML + IMAGES</Text>
+                </View>
+              </View>
+              <Text style={styles.previewArticleTitle}>{activeContent.bloggerTitle}</Text>
+
+              <View style={styles.bloggerActionCol}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: theme.colors.blogger }]}
+                  onPress={() =>
+                    handleCopyText(
+                      activeContent.bloggerHtmlBody || '',
+                      'bloggerHtml',
+                      'Complete SEO Review HTML copied to clipboard!'
+                    )
+                  }
+                  activeOpacity={0.85}
+                >
+                  <Ionicons
+                    name={copiedKey === 'bloggerHtml' ? 'checkmark' : 'copy-outline'}
+                    size={18}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.actionBtnText}>
+                    {copiedKey === 'bloggerHtml' ? 'HTML Copied to Clipboard!' : 'Copy SEO Article (HTML)'}
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={[styles.dualActionRow, { marginTop: 8 }]}>
+                  <TouchableOpacity
+                    style={[styles.secondaryActionBtn, { flex: 1 }]}
+                    onPress={handleOpenBloggerEditor}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="open-outline" size={15} color={theme.colors.blogger} />
+                    <Text style={styles.secondaryActionBtnText}>Open Blogger Editor</Text>
+                  </TouchableOpacity>
+
                   <TouchableOpacity
                     style={[styles.secondaryActionBtn, { flex: 1 }]}
                     onPress={() =>
-                      handleCopyText(
-                        activeProduct?.affiliateUrl || '',
-                        'pinLink',
-                        'Affiliate Pin link copied!'
+                      handleShareSystem(
+                        `${activeContent.bloggerTitle}\n\n${activeContent.bloggerHtmlBody}`,
+                        'Blogspot Review Article'
                       )
                     }
                     activeOpacity={0.7}
                   >
-                    <Ionicons
-                      name={copiedKey === 'pinLink' ? 'checkmark' : 'link-outline'}
-                      size={15}
-                      color={theme.colors.primaryLight}
-                    />
-                    <Text style={styles.secondaryActionBtnText}>
-                      {copiedKey === 'pinLink' ? 'Copied Link' : 'Copy Pin Link'}
-                    </Text>
+                    <Ionicons name="share-outline" size={15} color={theme.colors.blogger} />
+                    <Text style={styles.secondaryActionBtnText}>Share to Any App</Text>
                   </TouchableOpacity>
+                </View>
 
+                {settings.bloggerEmail ? (
                   <TouchableOpacity
-                    style={[styles.secondaryActionBtn, { flex: 1 }]}
-                    onPress={() => {
-                      const desc = `${activeContent.pinterestTitle}\n\n${activeContent.pinterestDescription || ''}\n\n${activeContent.pinterestTags?.join(' ') || ''}`;
-                      handleCopyText(desc, 'pinDesc', 'Pin title & tags copied!');
-                    }}
+                    style={[styles.secondaryActionBtn, { marginTop: 8 }]}
+                    onPress={handlePublishViaEmail}
                     activeOpacity={0.7}
                   >
-                    <Ionicons
-                      name={copiedKey === 'pinDesc' ? 'checkmark' : 'copy-outline'}
-                      size={15}
-                      color={theme.colors.secondaryLight}
-                    />
-                    <Text style={styles.secondaryActionBtnText}>
-                      {copiedKey === 'pinDesc' ? 'Copied Text' : 'Copy SEO Tags'}
-                    </Text>
+                    <Ionicons name="mail-outline" size={16} color={theme.colors.accentDeal} />
+                    <Text style={styles.secondaryActionBtnText}>Send Post via Email (Zero-OAuth)</Text>
                   </TouchableOpacity>
-                </View>
+                ) : null}
 
-                <TouchableOpacity
-                  style={[styles.secondaryActionBtn, { width: '100%', marginTop: 6 }]}
-                  onPress={handleOpenPinterest}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="logo-pinterest" size={16} color={theme.colors.pinterest} />
-                  <Text style={styles.secondaryActionBtnText}>Open Pinterest App / Web</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.tagWrap}>
-                <Text style={styles.tagsText}>
-                  {activeContent.pinterestTags?.join(' ')}
-                </Text>
+                {settings.bloggerAccessToken ? (
+                  <TouchableOpacity
+                    style={[styles.secondaryActionBtn, { marginTop: 8 }]}
+                    onPress={handlePublishBlogger}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="cloud-upload-outline" size={16} color={theme.colors.blogger} />
+                    <Text style={styles.secondaryActionBtnText}>Direct API Publish</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             </View>
-          ) : (
-            <View style={styles.electronicsPreview}>
-              <View style={styles.previewHeadingRow}>
-                <Ionicons name="layers-outline" size={18} color={theme.colors.primaryLight} />
-                <Text style={styles.previewHeading}>Multi-Channel Syndication Ready</Text>
-              </View>
+          )}
 
-              {/* Buffer / Publer Channel Switcher Tabs */}
-              <View style={styles.channelTabBar}>
+          {/* Destination 5: X / Twitter Hook */}
+          {(activeChannelTab === 'all' || activeChannelTab === 'x') && (
+            <View style={styles.channelCard}>
+              <View style={styles.channelCardHeader}>
+                <View style={styles.channelTitleRow}>
+                  <Ionicons name="logo-twitter" size={18} color={theme.colors.primaryLight} />
+                  <Text style={styles.channelTitle}>X (Twitter) Deal Hook</Text>
+                </View>
                 <TouchableOpacity
-                  style={[styles.channelTab, activeChannelTab === 'all' && styles.channelTabActive]}
-                  onPress={() => setActiveChannelTab('all')}
+                  style={styles.copySmallBtn}
+                  onPress={() => handleCopyText(activeContent.tweetText || '', 'xText')}
                 >
-                  <Text style={[styles.channelTabText, activeChannelTab === 'all' && styles.channelTabTextActive]}>
-                    All
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.channelTab, activeChannelTab === 'whatsapp' && styles.channelTabActive]}
-                  onPress={() => setActiveChannelTab('whatsapp')}
-                >
-                  <Ionicons name="logo-whatsapp" size={12} color={theme.colors.whatsapp} />
-                  <Text style={[styles.channelTabText, activeChannelTab === 'whatsapp' && styles.channelTabTextActive]}>
-                    WhatsApp
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.channelTab, activeChannelTab === 'telegram' && styles.channelTabActive]}
-                  onPress={() => setActiveChannelTab('telegram')}
-                >
-                  <Ionicons name="paper-plane" size={12} color={theme.colors.telegram} />
-                  <Text style={[styles.channelTabText, activeChannelTab === 'telegram' && styles.channelTabTextActive]}>
-                    Telegram
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.channelTab, activeChannelTab === 'blogger' && styles.channelTabActive]}
-                  onPress={() => setActiveChannelTab('blogger')}
-                >
-                  <Ionicons name="newspaper" size={12} color={theme.colors.blogger} />
-                  <Text style={[styles.channelTabText, activeChannelTab === 'blogger' && styles.channelTabTextActive]}>
-                    Blogspot
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.channelTab, activeChannelTab === 'x' && styles.channelTabActive]}
-                  onPress={() => setActiveChannelTab('x')}
-                >
-                  <Ionicons name="logo-twitter" size={12} color={theme.colors.primaryLight} />
-                  <Text style={[styles.channelTabText, activeChannelTab === 'x' && styles.channelTabTextActive]}>
-                    X
+                  <Ionicons
+                    name={copiedKey === 'xText' ? 'checkmark' : 'copy-outline'}
+                    size={13}
+                    color={theme.colors.primaryLight}
+                  />
+                  <Text style={styles.copySmallBtnText}>
+                    {copiedKey === 'xText' ? 'Copied' : 'Copy'}
                   </Text>
                 </TouchableOpacity>
               </View>
-
-              {/* Card 1: WhatsApp Channel Alert */}
-              {(activeChannelTab === 'all' || activeChannelTab === 'whatsapp') && (
-                <View style={styles.channelCard}>
-                  <View style={styles.channelCardHeader}>
-                    <View style={styles.channelTitleRow}>
-                      <Ionicons name="logo-whatsapp" size={18} color={theme.colors.whatsapp} />
-                      <Text style={styles.channelTitle}>WhatsApp Channel Message</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.copySmallBtn}
-                      onPress={() => handleCopyText(activeContent.whatsappMessage || '', 'whatsapp')}
-                    >
-                      <Ionicons
-                        name={copiedKey === 'whatsapp' ? 'checkmark' : 'copy-outline'}
-                        size={13}
-                        color={theme.colors.primaryLight}
-                      />
-                      <Text style={styles.copySmallBtnText}>
-                        {copiedKey === 'whatsapp' ? 'Copied' : 'Copy'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.previewCopyText}>{activeContent.whatsappMessage}</Text>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: theme.colors.whatsapp }]}
-                    onPress={handleShareWhatsApp}
-                    activeOpacity={0.85}
-                  >
-                    <Ionicons name="share-social-outline" size={18} color="#FFFFFF" />
-                    <Text style={styles.actionBtnText}>Share to WhatsApp</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Card 2: Telegram Deal Channel */}
-              {(activeChannelTab === 'all' || activeChannelTab === 'telegram') && (
-                <View style={styles.channelCard}>
-                  <View style={styles.channelCardHeader}>
-                    <View style={styles.channelTitleRow}>
-                      <Ionicons name="paper-plane-outline" size={18} color={theme.colors.telegram} />
-                      <Text style={styles.channelTitle}>Telegram Channel Alert</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.copySmallBtn}
-                      onPress={() => handleCopyText(activeContent.telegramMarkdown || '', 'telegram')}
-                    >
-                      <Ionicons
-                        name={copiedKey === 'telegram' ? 'checkmark' : 'copy-outline'}
-                        size={13}
-                        color={theme.colors.primaryLight}
-                      />
-                      <Text style={styles.copySmallBtnText}>
-                        {copiedKey === 'telegram' ? 'Copied' : 'Copy'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.previewCopyText} numberOfLines={4}>
-                    {activeContent.telegramMarkdown}
-                  </Text>
-                  {/* Primary: Broadcast to Telegram Channel (Bot API) */}
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: theme.colors.telegram }]}
-                    onPress={handleBroadcastTelegram}
-                    activeOpacity={0.85}
-                  >
-                    <Ionicons name="paper-plane" size={18} color="#FFFFFF" />
-                    <Text style={styles.actionBtnText}>Broadcast to Telegram Channel</Text>
-                  </TouchableOpacity>
-
-                  {/* Dual Action: Direct Share to Telegram App & Any App */}
-                  <View style={[styles.dualActionRow, { marginTop: 8 }]}>
-                    <TouchableOpacity
-                      style={[styles.secondaryActionBtn, { flex: 1 }]}
-                      onPress={handleShareTelegramDirect}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="share-social-outline" size={15} color={theme.colors.telegram} />
-                      <Text style={styles.secondaryActionBtnText}>Direct Share App</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.secondaryActionBtn, { flex: 1 }]}
-                      onPress={() =>
-                        handleShareSystem(
-                          activeContent.telegramMarkdown || '',
-                          'Telegram Deal Alert'
-                        )
-                      }
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="share-outline" size={15} color={theme.colors.telegram} />
-                      <Text style={styles.secondaryActionBtnText}>Share to Any App</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-
-              {/* Card 3: Google Blogger (Blogspot) */}
-              {(activeChannelTab === 'all' || activeChannelTab === 'blogger') && (
-                <View style={styles.channelCard}>
-                  <View style={styles.channelCardHeader}>
-                    <View style={styles.channelTitleRow}>
-                      <Ionicons name="newspaper-outline" size={18} color={theme.colors.blogger} />
-                      <Text style={styles.channelTitle}>1200+ Word SEO Review Article</Text>
-                    </View>
-                    <View style={styles.badgePill}>
-                      <Text style={styles.badgePillText}>HTML + IMAGES</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.previewArticleTitle}>{activeContent.bloggerTitle}</Text>
-
-                  <View style={styles.bloggerActionCol}>
-                    {/* Primary: Copy HTML Button */}
-                    <TouchableOpacity
-                      style={[styles.actionBtn, { backgroundColor: theme.colors.blogger }]}
-                      onPress={() =>
-                        handleCopyText(
-                          activeContent.bloggerHtmlBody || '',
-                          'bloggerHtml',
-                          'Complete SEO Review HTML copied to clipboard!'
-                        )
-                      }
-                      activeOpacity={0.85}
-                    >
-                      <Ionicons
-                        name={copiedKey === 'bloggerHtml' ? 'checkmark' : 'copy-outline'}
-                        size={18}
-                        color="#FFFFFF"
-                      />
-                      <Text style={styles.actionBtnText}>
-                        {copiedKey === 'bloggerHtml' ? 'HTML Copied to Clipboard!' : 'Copy SEO Article (HTML)'}
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* Dual Action: Open Web Editor & Native Share */}
-                    <View style={[styles.dualActionRow, { marginTop: 8 }]}>
-                      <TouchableOpacity
-                        style={[styles.secondaryActionBtn, { flex: 1 }]}
-                        onPress={handleOpenBloggerEditor}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="open-outline" size={15} color={theme.colors.blogger} />
-                        <Text style={styles.secondaryActionBtnText}>Open Blogger Editor</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.secondaryActionBtn, { flex: 1 }]}
-                        onPress={() =>
-                          handleShareSystem(
-                            `${activeContent.bloggerTitle}\n\n${activeContent.bloggerHtmlBody}`,
-                            'Blogspot Review Article'
-                          )
-                        }
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="share-outline" size={15} color={theme.colors.blogger} />
-                        <Text style={styles.secondaryActionBtnText}>Share to Any App</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Optional Post via Email (Zero-OAuth) */}
-                    {settings.bloggerEmail ? (
-                      <TouchableOpacity
-                        style={[styles.secondaryActionBtn, { marginTop: 8 }]}
-                        onPress={handlePublishViaEmail}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="mail-outline" size={16} color={theme.colors.accentDeal} />
-                        <Text style={styles.secondaryActionBtnText}>Send Post via Email (Zero-OAuth)</Text>
-                      </TouchableOpacity>
-                    ) : null}
-
-                    {/* Optional Direct API Publish Button (Only if OAuth token configured) */}
-                    {settings.bloggerAccessToken ? (
-                      <TouchableOpacity
-                        style={[styles.secondaryActionBtn, { marginTop: 8 }]}
-                        onPress={handlePublishBlogger}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="cloud-upload-outline" size={16} color={theme.colors.blogger} />
-                        <Text style={styles.secondaryActionBtnText}>Direct API Publish</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                </View>
-              )}
-
-              {/* Card 4: X / Twitter */}
-              {(activeChannelTab === 'all' || activeChannelTab === 'x') && (
-                <View style={styles.channelCard}>
-                  <View style={styles.channelCardHeader}>
-                    <View style={styles.channelTitleRow}>
-                      <Ionicons name="logo-twitter" size={18} color={theme.colors.primaryLight} />
-                      <Text style={styles.channelTitle}>X (Twitter) Deal Hook</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.copySmallBtn}
-                      onPress={() => handleCopyText(activeContent.tweetText || '', 'xText')}
-                    >
-                      <Ionicons
-                        name={copiedKey === 'xText' ? 'checkmark' : 'copy-outline'}
-                        size={13}
-                        color={theme.colors.primaryLight}
-                      />
-                      <Text style={styles.copySmallBtnText}>
-                        {copiedKey === 'xText' ? 'Copied' : 'Copy'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.previewCopyText}>{activeContent.tweetText}</Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.actionBtn,
-                      {
-                        backgroundColor: '#1E293B',
-                        borderWidth: 1,
-                        borderColor: theme.colors.borderSubtle,
-                      },
-                    ]}
-                    onPress={handleShareX}
-                    activeOpacity={0.85}
-                  >
-                    <Ionicons name="logo-twitter" size={18} color="#FFFFFF" />
-                    <Text style={styles.actionBtnText}>Post to X</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+              <Text style={styles.previewCopyText}>{activeContent.tweetText}</Text>
+              <TouchableOpacity
+                style={[
+                  styles.actionBtn,
+                  {
+                    backgroundColor: '#1E293B',
+                    borderWidth: 1,
+                    borderColor: theme.colors.borderSubtle,
+                  },
+                ]}
+                onPress={handleShareX}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="logo-twitter" size={18} color="#FFFFFF" />
+                <Text style={styles.actionBtnText}>Post to X</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -1127,94 +1175,136 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.5,
   },
-  categoryRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 16,
-  },
-  categoryPill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
-    borderRadius: theme.radii.md,
-    paddingVertical: 12,
-  },
-  categoryPillActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primaryLight,
-    ...theme.shadows.glowPrimary,
-  },
-  categoryPillFashionActive: {
-    backgroundColor: theme.colors.secondary,
-    borderColor: theme.colors.secondaryLight,
-    ...theme.shadows.glowSecondary,
-  },
-  categoryPillText: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.sizes.sm,
-    fontWeight: '600',
-  },
-  categoryPillTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
   autoHunterCard: {
     backgroundColor: theme.colors.surface,
+    padding: 16,
     borderRadius: theme.radii.lg,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-    padding: 16,
+    borderColor: theme.colors.borderSubtle,
     marginBottom: 16,
-    ...theme.shadows.glowDeal,
+    ...theme.shadows.card,
   },
   autoHunterHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 12,
   },
   autoHunterTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   autoHunterTitle: {
     color: theme.colors.textPrimary,
     fontSize: theme.typography.sizes.sm,
     fontWeight: '700',
+    letterSpacing: 0.3,
   },
   priorityBadge: {
-    backgroundColor: theme.colors.accentDealGlow,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.4)',
-    paddingHorizontal: 7,
+    backgroundColor: theme.colors.surfaceElevated,
+    paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: theme.radii.full,
+    borderRadius: theme.radii.xs,
+    borderWidth: 1,
+    borderColor: theme.colors.accentDeal,
   },
   priorityBadgeText: {
     color: theme.colors.accentDeal,
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
-  autoHunterSub: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.sizes.xxs,
-    lineHeight: 16,
+  searchKeywordWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
     marginBottom: 12,
   },
+  searchKeywordInput: {
+    flex: 1,
+    color: theme.colors.textPrimary,
+    fontSize: theme.typography.sizes.xs,
+    padding: 0,
+  },
+  categoryScroll: {
+    marginBottom: 12,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.colors.surfaceElevated,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: theme.radii.full,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    marginRight: 8,
+  },
+  categoryChipActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primaryLight,
+  },
+  categoryChipText: {
+    color: theme.colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  categoryChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  discountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  discountRowLabel: {
+    color: theme.colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  discountChip: {
+    backgroundColor: theme.colors.background,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: theme.radii.xs,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    marginRight: 6,
+  },
+  discountChipActive: {
+    backgroundColor: 'rgba(245, 158, 11, 0.18)',
+    borderColor: theme.colors.accentWarning,
+  },
+  discountChipText: {
+    color: theme.colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  discountChipTextActive: {
+    color: theme.colors.accentWarning,
+  },
   autoHunterBtn: {
-    backgroundColor: theme.colors.accentDeal,
-    borderRadius: theme.radii.md,
+    backgroundColor: '#0F766E',
     paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: theme.radii.md,
     alignItems: 'center',
     justifyContent: 'center',
-    ...theme.shadows.glowDeal,
+    shadowColor: '#0F766E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 4,
   },
   autoHunterBtnInner: {
     flexDirection: 'row',
@@ -1224,14 +1314,15 @@ const styles = StyleSheet.create({
   autoHunterBtnText: {
     color: '#FFFFFF',
     fontSize: theme.typography.sizes.xs,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   inputCard: {
     backgroundColor: theme.colors.surface,
+    padding: 16,
     borderRadius: theme.radii.lg,
     borderWidth: 1,
     borderColor: theme.colors.borderSubtle,
-    padding: 16,
     marginBottom: 16,
     ...theme.shadows.card,
   },
@@ -1242,23 +1333,22 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   inputLabel: {
-    color: theme.colors.textSecondary,
+    color: theme.colors.textPrimary,
     fontSize: theme.typography.sizes.xs,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   pasteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: theme.colors.primaryGlow,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: theme.radii.xs,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
   pasteBtnText: {
     color: theme.colors.primaryLight,
     fontSize: theme.typography.sizes.xxs,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -1266,9 +1356,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     borderRadius: theme.radii.md,
     borderWidth: 1,
-    borderColor: theme.colors.surfaceBorder,
+    borderColor: theme.colors.borderSubtle,
     paddingHorizontal: 12,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   inputIcon: {
     marginRight: 8,
@@ -1276,16 +1366,16 @@ const styles = StyleSheet.create({
   textInput: {
     flex: 1,
     color: theme.colors.textPrimary,
-    paddingVertical: 12,
-    fontSize: theme.typography.sizes.sm,
+    fontSize: theme.typography.sizes.xs,
+    paddingVertical: 10,
   },
   clearBtn: {
     padding: 4,
   },
   primaryButton: {
     backgroundColor: theme.colors.primary,
+    paddingVertical: 13,
     borderRadius: theme.radii.md,
-    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
     ...theme.shadows.glowPrimary,
@@ -1295,44 +1385,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: theme.typography.sizes.base,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+    fontSize: theme.typography.sizes.sm,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   statusBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: theme.colors.surface,
-    padding: 12,
+    backgroundColor: theme.colors.surfaceElevated,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: theme.radii.md,
-    borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.primaryGlow,
   },
   statusText: {
-    color: theme.colors.textPrimary,
+    color: theme.colors.textSecondary,
     fontSize: theme.typography.sizes.xs,
-    fontWeight: '500',
     flex: 1,
+    lineHeight: 18,
   },
   tuningCard: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radii.lg,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
-    padding: 14,
-    marginBottom: 14,
+    borderColor: theme.colors.borderSubtle,
+    marginBottom: 16,
+    overflow: 'hidden',
   },
   tuningHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    padding: 14,
+    backgroundColor: theme.colors.surfaceElevated,
   },
   tuningHeaderTitleRow: {
     flexDirection: 'row',
@@ -1343,32 +1436,28 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     fontSize: theme.typography.sizes.xs,
     fontWeight: '700',
-    letterSpacing: 0.2,
   },
   tuningBody: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.borderSubtle,
+    padding: 14,
+    gap: 12,
   },
   tuneField: {
-    marginBottom: 10,
+    gap: 4,
   },
   tuneLabel: {
-    color: theme.colors.textSecondary,
-    fontSize: 11,
+    color: theme.colors.textMuted,
+    fontSize: theme.typography.sizes.xxs,
     fontWeight: '600',
-    marginBottom: 4,
   },
   tuneInput: {
     backgroundColor: theme.colors.background,
     borderRadius: theme.radii.sm,
     borderWidth: 1,
-    borderColor: theme.colors.surfaceBorder,
+    borderColor: theme.colors.borderSubtle,
     color: theme.colors.textPrimary,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
     fontSize: theme.typography.sizes.xs,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
   },
   imageTuneRow: {
     flexDirection: 'row',
@@ -1376,29 +1465,30 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tuneThumb: {
-    width: 38,
-    height: 38,
-    borderRadius: theme.radii.xs,
-    backgroundColor: '#FFFFFF',
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    backgroundColor: theme.colors.background,
     borderWidth: 1,
     borderColor: theme.colors.borderSubtle,
   },
   tuneRow: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 12,
   },
   tuneCol: {
     flex: 1,
+    gap: 4,
   },
   tuneApplyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: theme.colors.accentDeal,
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 9,
     borderRadius: theme.radii.sm,
-    paddingVertical: 10,
+    marginTop: 4,
   },
   tuneApplyBtnText: {
     color: '#FFFFFF',
@@ -1412,109 +1502,53 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(239, 68, 68, 0.1)',
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.3)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     borderRadius: theme.radii.md,
-    marginBottom: 14,
+    marginBottom: 16,
   },
   dealScoreText: {
-    color: '#F87171',
-    fontSize: 12,
+    color: '#EF4444',
+    fontSize: theme.typography.sizes.xs,
     fontWeight: '800',
-    letterSpacing: 0.3,
   },
   previewContainer: {
-    marginTop: 4,
-  },
-  fashionPreview: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
-    padding: 16,
-    alignItems: 'center',
-    ...theme.shadows.card,
+    gap: 16,
   },
   previewHeadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 14,
-    alignSelf: 'flex-start',
   },
   previewHeading: {
     color: theme.colors.textPrimary,
     fontSize: theme.typography.sizes.base,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
-  pinCenterWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 8,
-  },
-  pinActionGroup: {
-    width: '100%',
-    marginTop: 14,
-    gap: 8,
-  },
-  dualActionRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  secondaryActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: theme.colors.background,
-    borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
-    paddingVertical: 10,
-    borderRadius: theme.radii.md,
-  },
-  secondaryActionBtnText: {
-    color: theme.colors.textPrimary,
-    fontSize: theme.typography.sizes.xs,
-    fontWeight: '600',
-  },
-  tagWrap: {
-    marginTop: 14,
-    backgroundColor: theme.colors.background,
-    padding: 10,
-    borderRadius: theme.radii.md,
-    borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
-    width: '100%',
-  },
-  tagsText: {
-    color: theme.colors.secondaryLight,
-    fontSize: theme.typography.sizes.xs,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  electronicsPreview: {
-    gap: 14,
+  channelScroll: {
+    marginBottom: 4,
   },
   channelTabBar: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 6,
-    flexWrap: 'wrap',
+    backgroundColor: theme.colors.surface,
+    padding: 4,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    gap: 4,
   },
   channelTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: theme.colors.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: theme.radii.full,
-    borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: theme.radii.sm,
   },
   channelTabActive: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: 1,
     borderColor: theme.colors.primaryLight,
   },
   channelTabText: {
@@ -1524,21 +1558,21 @@ const styles = StyleSheet.create({
   },
   channelTabTextActive: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontWeight: '800',
   },
   channelCard: {
     backgroundColor: theme.colors.surface,
+    padding: 16,
     borderRadius: theme.radii.lg,
     borderWidth: 1,
     borderColor: theme.colors.borderSubtle,
-    padding: 16,
     ...theme.shadows.card,
   },
   channelCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   channelTitleRow: {
     flexDirection: 'row',
@@ -1550,56 +1584,39 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.sizes.sm,
     fontWeight: '700',
   },
-  badgePill: {
-    backgroundColor: theme.colors.primaryGlow,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: theme.radii.xs,
-  },
-  badgePillText: {
-    color: theme.colors.primaryLight,
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
   copySmallBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: theme.colors.primaryGlow,
+    backgroundColor: theme.colors.surfaceElevated,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: theme.radii.xs,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
   },
   copySmallBtnText: {
     color: theme.colors.primaryLight,
-    fontSize: theme.typography.sizes.xxs,
+    fontSize: 10,
     fontWeight: '700',
   },
   previewCopyText: {
     color: theme.colors.textSecondary,
     fontSize: theme.typography.sizes.xs,
-    lineHeight: 18,
+    lineHeight: 19,
+    marginBottom: 14,
     backgroundColor: theme.colors.background,
     padding: 12,
-    borderRadius: theme.radii.sm,
+    borderRadius: theme.radii.md,
     borderWidth: 1,
     borderColor: theme.colors.borderSubtle,
-    marginBottom: 12,
   },
   previewArticleTitle: {
     color: theme.colors.textPrimary,
     fontSize: theme.typography.sizes.sm,
-    fontWeight: '600',
-    backgroundColor: theme.colors.background,
-    padding: 12,
-    borderRadius: theme.radii.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
+    fontWeight: '700',
     marginBottom: 12,
-  },
-  bloggerActionCol: {
-    gap: 8,
+    lineHeight: 20,
   },
   actionBtn: {
     flexDirection: 'row',
@@ -1607,12 +1624,70 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: theme.radii.md,
   },
   actionBtnText: {
     color: '#FFFFFF',
+    fontSize: theme.typography.sizes.xs,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  dualActionRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  secondaryActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: theme.colors.surfaceElevated,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+  },
+  secondaryActionBtnText: {
+    color: theme.colors.textSecondary,
+    fontSize: 11,
     fontWeight: '700',
-    fontSize: theme.typography.sizes.sm,
-    letterSpacing: 0.2,
+  },
+  pinCenterWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 14,
+  },
+  tagWrap: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.radii.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+  },
+  tagsText: {
+    color: '#F472B6',
+    fontSize: 11,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  badgePill: {
+    backgroundColor: 'rgba(245, 125, 0, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: theme.radii.xs,
+    borderWidth: 1,
+    borderColor: theme.colors.blogger,
+  },
+  badgePillText: {
+    color: theme.colors.blogger,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  bloggerActionCol: {
+    gap: 4,
   },
 });

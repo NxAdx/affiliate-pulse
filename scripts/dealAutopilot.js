@@ -145,12 +145,21 @@ function decodeHtml(str) {
     .replace(/&#x2F;/g, '/');
 }
 
+function cleanHighResImageUrl(rawUrl) {
+  if (!rawUrl || !rawUrl.startsWith('http')) return rawUrl;
+  let clean = rawUrl.trim();
+  if (clean.includes('media-amazon.com') || clean.includes('images-amazon.com') || clean.includes('ssl-images-amazon.com')) {
+    clean = clean.replace(/\._[^.]+\./, '.');
+  }
+  return clean;
+}
+
 function parseProductPage(html, asin, category) {
   let title = '';
   const titleMatch =
     html.match(/id="productTitle"[^>]*>([^<]+)<\/span>/i) ||
     html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i);
-  if (titleMatch) title = decodeHtml(titleMatch[1].trim());
+  if (titleMatch) title = decodeHtml(titleMatch[1].replace(/Amazon\.in\s*:?/gi, '').trim());
   if (!title || title.length < 5) return null;
 
   let imageUrl = '';
@@ -160,22 +169,46 @@ function parseProductPage(html, asin, category) {
     html.match(/"large":"(https:\/\/[^"]+media-amazon\.com[^"]+)"/i) ||
     html.match(/id="landingImage"[^>]*src="([^"]+)"/i) ||
     html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i);
-  if (imgMatch) imageUrl = imgMatch[1].trim();
+  if (imgMatch) {
+    imageUrl = cleanHighResImageUrl(imgMatch[1].trim());
+  } else {
+    imageUrl = `https://m.media-amazon.com/images/P/${asin}.jpg`;
+  }
 
   let price = '';
-  const priceMatch = html.match(/class="a-price-whole">([0-9,]+)/i);
+  const priceMatch =
+    html.match(/id="corePriceDisplay_desktop_feature_div"[\s\S]*?class="a-price-whole">([0-9,]+)/i) ||
+    html.match(/id="corePrice_feature_div"[\s\S]*?class="a-price-whole">([0-9,]+)/i) ||
+    html.match(/class="apexPriceToPay"[^>]*>[\s\S]*?class="a-price-whole">([0-9,]+)/i) ||
+    html.match(/class="a-price aok-align-center[^"]*"[\s\S]*?class="a-price-whole">([0-9,]+)/i) ||
+    html.match(/class="a-price-whole">([0-9,]+)/i);
   if (priceMatch) price = '₹' + priceMatch[1].replace(/,/g, '');
   if (!price) return null;
 
   let mrp = '';
-  const mrpMatch = html.match(
-    /class="a-price a-text-price"[^>]*>[\s\S]*?<span class="a-offscreen">₹?([0-9,]+)<\/span>/i
-  );
+  const mrpMatch =
+    html.match(/class="a-price a-text-price"[^>]*>[\s\S]*?<span class="a-offscreen">₹?([0-9,]+)<\/span>/i) ||
+    html.match(/data-a-strike="true"[\s\S]*?<span class="a-offscreen">₹?([0-9,]+)<\/span>/i) ||
+    html.match(/class="basisPrice"[\s\S]*?<span class="a-offscreen">₹?([0-9,]+)<\/span>/i) ||
+    html.match(/(?:M\.?R\.?P\.?|List\s*Price|Typical\s*Price)[\s\S]{0,80}?class="[^"]*a-text-strike[^"]*">₹?([0-9,]+)/i) ||
+    html.match(/class="[^"]*a-text-strike[^"]*">₹?([0-9,]+)/i);
   if (mrpMatch) mrp = '₹' + mrpMatch[1].replace(/,/g, '');
 
   let discount = '';
-  const discMatch = html.match(/class="[^"]*savingsPercentage[^"]*">-?([0-9]+)%<\/span>/i);
-  if (discMatch) discount = discMatch[1] + '%';
+  if (price && mrp) {
+    const pNum = parseInt(price.replace(/[^0-9]/g, ''), 10);
+    const mNum = parseInt(mrp.replace(/[^0-9]/g, ''), 10);
+    if (!isNaN(pNum) && !isNaN(mNum) && mNum > pNum) {
+      discount = `${Math.round(((mNum - pNum) / mNum) * 100)}%`;
+    }
+  }
+
+  if (!discount) {
+    const discMatch =
+      html.match(/class="[^"]*savingsPercentage[^"]*">-?([0-9]+)%<\/span>/i) ||
+      html.match(/class="reinventPriceSavingsPercentageMargin[^"]*">-?([0-9]+)%<\/span>/i);
+    if (discMatch) discount = discMatch[1] + '%';
+  }
 
   const affiliateUrl = `https://www.amazon.in/dp/${asin}?tag=${CONFIG.amazonTag}`;
 

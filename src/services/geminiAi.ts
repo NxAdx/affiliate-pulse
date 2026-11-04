@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { ProductMetadata, GeneratedContent } from '../types';
+import { ProductMetadata, GeneratedContent, DealCategory } from '../types';
 
 export class GeminiAiService {
   private client: GoogleGenerativeAI | null = null;
@@ -32,7 +32,7 @@ export class GeminiAiService {
         try {
           return JSON.parse(sanitized);
         } catch {
-          // Fall through to regex extraction
+          // Fall through
         }
       }
     }
@@ -49,7 +49,7 @@ export class GeminiAiService {
         try {
           return JSON.parse(sanitized);
         } catch {
-          // Fall through to regex extraction
+          // Fall through
         }
       }
     }
@@ -58,13 +58,12 @@ export class GeminiAiService {
     try {
       return JSON.parse(trimmed);
     } catch {
-      // Stage 4: Regex-based field extraction fallback
       return GeminiAiService.extractFieldsByRegex(trimmed);
     }
   }
 
   /**
-   * Sanitizes broken JSON strings produced by LLMs (unescaped newlines, trailing commas, etc.)
+   * Sanitizes broken JSON strings produced by LLMs
    */
   private static sanitizeJsonString(str: string): string {
     return str
@@ -107,7 +106,6 @@ export class GeminiAiService {
       }
     }
 
-    // Tags array extraction
     const tagsMatch = text.match(/"pinterestTags"\s*:\s*\[([\s\S]*?)\]/i);
     if (tagsMatch && tagsMatch[1]) {
       const tagStrings = tagsMatch[1].match(/"([^"]+)"/g);
@@ -140,14 +138,22 @@ export class GeminiAiService {
   }
 
   /**
-   * Generates promotional copy for Electronics & Tech
-   * (Lengthy 1000-1200+ word Blogger SEO Review with images + Telegram Alert + WhatsApp/X hooks)
+   * Universal Omnichannel Generator:
+   * Generates promotional copy for ALL 5 platforms simultaneously:
+   * 1. Google Blogger (1000-1200+ word structured SEO Review with specs & CTA)
+   * 2. Telegram Deal Channel (Punchy markdown alert with buy links)
+   * 3. WhatsApp (Direct conversational price-drop hook)
+   * 4. Twitter / X (Viral deal tweet under 260 chars)
+   * 5. Pinterest (High-converting 2:3 Pin Title, SEO Description, Pin Badge & Tags)
    */
-  async generateElectronicsDeal(product: ProductMetadata): Promise<GeneratedContent> {
+  async generateOmnichannelDeal(
+    product: ProductMetadata,
+    category: DealCategory = 'general'
+  ): Promise<GeneratedContent> {
     const safeProduct = this.normalizeProduct(product);
 
     if (!this.client) {
-      return this.generateFallbackElectronics(safeProduct);
+      return this.generateFallbackOmnichannel(safeProduct, category);
     }
 
     try {
@@ -165,44 +171,44 @@ export class GeminiAiService {
           : '';
 
       const prompt = `
-You are a senior tech journalist and conversion copywriter.
-Create platform-tailored promotional copy and an in-depth, lengthy review for:
+You are a top commercial e-commerce copywriter and social media strategist.
+Create platform-tailored promotional copy across ALL 5 distribution channels for this product:
 
 Product Title: ${safeProduct.title}
+Category: ${category.toUpperCase()}
 Platform: ${safeProduct.platform.toUpperCase()}
-Current Deal Price: ${safeProduct.currentPrice}
+Deal Price: ${safeProduct.currentPrice}
 Original MRP: ${safeProduct.originalPrice}
 Discount: ${safeProduct.discountPercent}
-Savings: ${safeProduct.savingsAmount || 'Massive Discount'}
+Savings: ${safeProduct.savingsAmount || 'Massive Savings'}
 Product Image URL: ${safeProduct.imageUrl}
 Affiliate URL: ${safeProduct.affiliateUrl}
 
-REQUIREMENTS:
-1. "bloggerTitle": An SEO-optimized review title under 70 characters with 2026 and buyer intent (e.g. "${safeProduct.title} Review & Lowest Price Deal (2026)").
+REQUIREMENTS FOR ALL 5 CHANNELS:
+1. "bloggerTitle": An SEO-optimized review title under 70 characters with year 2026 and buyer intent (e.g. "${safeProduct.title} Review & Best Price Deal (2026)").
 2. "bloggerHtmlBody": A comprehensive, in-depth, 1000-1200+ word SEO review article in clean, structured HTML (do not include <html> or <body> tags, only article content):
    - Wrap in <div class="review-article" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.7; color: #1e293b; max-width: 820px; margin: 0 auto;">
    - Eye-catching header rating badge (e.g. ⭐⭐⭐⭐½ 4.6/5 Editor's Choice).
-   - HERO PRODUCT IMAGE: Embed <div style="text-align:center; margin:24px 0;"><img src="${safeProduct.imageUrl}" alt="${safeProduct.title}" style="max-width:100%; max-height:480px; object-fit:contain; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.08); background:#ffffff; padding:12px; border:1px solid #e2e8f0;" /><p style="color:#64748b; font-size:13px; margin-top:8px;">${safeProduct.title} Official Product View</p></div>
-   - <h3>🔥 Deal & Pricing Breakdown</h3>: Callout box comparing Deal Price (${safeProduct.currentPrice}) vs Original MRP (${safeProduct.originalPrice}) with savings callout (${safeProduct.savingsAmount || safeProduct.discountPercent}).
-   - <h3>⚙️ Technical Specifications</h3>: HTML table with 8-10 rows of detailed specs (Model, Category, Platform, Connectivity, Audio/Hardware, Battery Life, Build Materials, Warranty).
-   - <h3>🎧 In-Depth Daily Usage & Performance Analysis</h3>: 3 detailed paragraphs analyzing real-world durability, ergonomics, performance, and day-to-day impressions.
+   - HERO PRODUCT IMAGE: Embed <div style="text-align:center; margin:24px 0;"><img src="${safeProduct.imageUrl}" alt="${safeProduct.title}" style="max-width:100%; max-height:480px; object-fit:contain; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.08); background:#ffffff; padding:12px; border:1px solid #e2e8f0;" /><p style="color:#64748b; font-size:13px; margin-top:8px;">${safeProduct.title} Official View</p></div>
+   - <h3>🔥 Deal & Pricing Breakdown</h3>: Callout comparing Deal Price (${safeProduct.currentPrice}) vs Original MRP (${safeProduct.originalPrice}) with savings callout (${safeProduct.savingsAmount || safeProduct.discountPercent}).
+   - <h3>⚙️ Key Product Specifications</h3>: HTML table with 6-8 rows of specs.
+   - <h3>🔍 In-Depth Real-World Performance & Quality Analysis</h3>: 3 detailed paragraphs testing build, usability, durability, and daily impressions.
    ${secondaryImageNote}
-   - <h3>💡 Why This Product Stands Out</h3>: 3 detailed bullet points with bold subheadings.
+   - <h3>💡 Key Highlights</h3>: 3 bullet points with bold subheadings.
    - <h3>⚖️ Pros & Cons</h3>: Two-column visual card comparing advantages and minor drawbacks.
-   - <h3>🎯 Who Should Buy This vs Who Should Look Elsewhere</h3>: Target audience segmentation.
-   - <h3>❓ Frequently Asked Questions (FAQ)</h3>: 3 realistic buyer questions and answers.
-   - <h3>🏁 Final Verdict</h3>: Concluding buyer verdict.
+   - <h3>🎯 Target Audience & Verdict</h3>: Who should buy this.
    - HIGH-CONVERTING CTA BUTTON: <div style="text-align:center; margin:32px 0;"><a href="${safeProduct.affiliateUrl}" style="background:#10b981; color:#ffffff; padding:16px 36px; text-decoration:none; font-size:18px; font-weight:bold; border-radius:10px; display:inline-block; box-shadow:0 4px 14px rgba(16,185,129,0.4);" target="_blank" rel="nofollow sponsored">⚡ Check Current Live Deal on ${safeProduct.platform.toUpperCase()} &rarr;</a></div>
    - FTC Affiliate Disclosure.
    - </div>
-3. "telegramMarkdown": Urgent, punchy Telegram deal alert using emojis (🔥, ⚡, 🛒, 🏷️), price drop callout, strikethrough original price, 3 quick feature bullets, and clean direct link:
-   🔥 *LOOT DEAL ALERT* 🔥\\n\\n*${safeProduct.title.replace(/[*_`]/g, '')}*\\n\\n💰 *Deal Price:* ${safeProduct.currentPrice} ~(${safeProduct.originalPrice})~\\n📉 *Offer:* ${safeProduct.dealScore || safeProduct.discountPercent}\\n\\n⚡ *Key Highlights:*\\n• High-performance segment leader\\n• Certified authentic with warranty\\n• Fast shipping available\\n\\n🛒 *Buy Now Before Deal Ends:*\\n👉 ${safeProduct.affiliateUrl}
-4. "whatsappMessage": A high-converting WhatsApp deal message. MUST include:
-   - Catchy price-drop alert line with emojis (🔥, ⚡)
-   - Product title
-   - Explicit price line showing current deal price: "💰 Deal Price: ${safeProduct.currentPrice}" and original MRP: "${safeProduct.originalPrice}" (${safeProduct.savingsAmount || safeProduct.discountPercent})
-   - Direct affiliate link: "👉 Grab Deal: ${safeProduct.affiliateUrl}"
-5. "tweetText": A viral X/Twitter hook under 260 characters with discount %, direct affiliate link, and hashtags (#TechDeals #${safeProduct.platform} #Deals).
+3. "telegramMarkdown": Punchy Telegram deal alert using emojis (🔥, ⚡, 🛒, 🏷️), price drop callout, strikethrough original price, 3 quick feature bullets, and clean direct link:
+   🔥 *LOOT DEAL ALERT* 🔥\\n\\n*${safeProduct.title.replace(/[*_`]/g, '')}*\\n\\n💰 *Deal Price:* ${safeProduct.currentPrice} ~(${safeProduct.originalPrice})~\\n📉 *Offer:* ${safeProduct.dealScore || safeProduct.discountPercent}\\n\\n⚡ *Key Highlights:*\\n• High-rated verified product\\n• Official brand warranty\\n• Fast shipping available\\n\\n🛒 *Buy Now Before Deal Ends:*\\n👉 ${safeProduct.affiliateUrl}
+4. "whatsappMessage": A high-converting WhatsApp deal message showing Deal Price (${safeProduct.currentPrice}), MRP (${safeProduct.originalPrice}), and direct link: "👉 Grab Deal: ${safeProduct.affiliateUrl}".
+5. "tweetText": A viral X/Twitter hook under 260 characters with discount %, direct affiliate link, and hashtags (#Deals #${safeProduct.platform} #Sale).
+6. "pinterestTitle": Searchable, click-worthy Pin title under 60 characters tailored for Pinterest visual search (e.g. "Top Pick 2026: ${safeProduct.title.slice(0, 35)} | ${safeProduct.discountPercent} OFF").
+7. "pinterestDescription": 2 sentences of attractive visual recommendation describing why this product is a must-have, ending with "Tap to shop directly."
+8. "pinBadgeText": Punchy uppercase badge for the 2:3 graphic banner (e.g. MUST-HAVE DEAL, TRENDING PICK, BEST VALUE, EDITORS CHOICE, LIMITED TIME). Max 20 chars.
+9. "pinPriceTag": Clean formatted price string with digits (e.g. "${safeProduct.currentPrice}").
+10. "pinterestTags": Array of 5-8 hyper-targeted Pinterest SEO hashtags (e.g. ["#BestDeals", "#ShoppingInspo", "#AffordableFinds", "#AmazonFinds", "#Trending"]).
 
 Return ONLY valid JSON matching this exact structure:
 {
@@ -210,78 +216,7 @@ Return ONLY valid JSON matching this exact structure:
   "bloggerHtmlBody": "string",
   "telegramMarkdown": "string",
   "whatsappMessage": "string",
-  "tweetText": "string"
-}
-`;
-
-      const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
-      const parsed = GeminiAiService.extractJsonFromResponse(responseText);
-
-      let whatsappMsg = parsed.whatsappMessage || this.generateFallbackElectronics(safeProduct).whatsappMessage;
-      whatsappMsg = whatsappMsg.replace(/₹\s*[,.\s]*(?![0-9])/g, safeProduct.currentPrice);
-      if (!whatsappMsg.includes(safeProduct.currentPrice)) {
-        whatsappMsg = `🔥 *Price Drop Alert!*\n*${safeProduct.title}*\n\n💰 *Deal Price:* ${safeProduct.currentPrice} ~(${safeProduct.originalPrice})~ (${safeProduct.savingsAmount || safeProduct.discountPercent})\n\n👉 Grab Deal: ${safeProduct.affiliateUrl}`;
-      }
-
-      let telegramMsg = parsed.telegramMarkdown || this.generateFallbackElectronics(safeProduct).telegramMarkdown;
-      telegramMsg = telegramMsg.replace(/₹\s*[,.\s]*(?![0-9])/g, safeProduct.currentPrice);
-
-      let tweetText = parsed.tweetText || this.generateFallbackElectronics(safeProduct).tweetText;
-      tweetText = tweetText.replace(/₹\s*[,.\s]*(?![0-9])/g, safeProduct.currentPrice);
-
-      return {
-        category: 'electronics',
-        bloggerTitle: parsed.bloggerTitle || `${safeProduct.title} Review & Lowest Price Deal (2026)`,
-        bloggerHtmlBody: parsed.bloggerHtmlBody || this.generateFallbackElectronics(safeProduct).bloggerHtmlBody,
-        telegramMarkdown: telegramMsg,
-        whatsappMessage: whatsappMsg,
-        tweetText: tweetText,
-      };
-    } catch {
-      return this.generateFallbackElectronics(safeProduct);
-    }
-  }
-
-  /**
-   * Generates high-converting visual Pin copy for Men's Fashion
-   */
-  async generateFashionPin(product: ProductMetadata): Promise<GeneratedContent> {
-    const safeProduct = this.normalizeProduct(product);
-
-    if (!this.client) {
-      return this.generateFallbackFashion(safeProduct);
-    }
-
-    try {
-      const model = this.client.getGenerativeModel({
-        model: 'gemini-1.5-flash',
-        generationConfig: {
-          temperature: 0.7,
-          topP: 0.95,
-        },
-      });
-
-      const prompt = `
-You are a senior Pinterest fashion curator and menswear stylist.
-Create viral Pinterest pin copy and styling metadata for this men's fashion item:
-
-Product Title: ${safeProduct.title}
-Platform: ${safeProduct.platform.toUpperCase()}
-Current Price: ${safeProduct.currentPrice}
-Original Price: ${safeProduct.originalPrice}
-Discount: ${safeProduct.discountPercent}
-Affiliate URL: ${safeProduct.affiliateUrl}
-
-REQUIREMENTS:
-1. "pinterestTitle": Searchable, click-worthy Pin title under 60 characters tailored for Pinterest visual search (e.g., "Trending Minimalist Outfit Pick 2026 | Under ${safeProduct.currentPrice}").
-2. "pinterestDescription": 2 sentences of stylish pairing advice (what shoes/trousers/accessories to pair it with) ending with "Tap to shop the full look directly."
-3. "pinBadgeText": Punchy uppercase outfit badge for the visual banner (e.g. MUST-HAVE OUTFIT, TRENDING LOOK, OLD MONEY FIT, STREETWEAR ESSENTIAL, SMART CASUAL). Max 20 chars.
-4. "pinPriceTag": Clean formatted price string with digits (e.g. "${safeProduct.currentPrice}").
-5. "pinterestTags": Array of 5-8 hyper-targeted Pinterest SEO hashtags (e.g. ["#MensFashion", "#OOTDMen", "#MensStyle", "#Streetwear", "#AffordableFashion"]).
-
-Return ONLY valid JSON matching this exact structure:
-{
+  "tweetText": "string",
   "pinterestTitle": "string",
   "pinterestDescription": "string",
   "pinBadgeText": "string",
@@ -294,30 +229,63 @@ Return ONLY valid JSON matching this exact structure:
       const responseText = result.response.text();
       const parsed = GeminiAiService.extractJsonFromResponse(responseText);
 
+      const fallback = this.generateFallbackOmnichannel(safeProduct, category);
+
+      let whatsappMsg = parsed.whatsappMessage || fallback.whatsappMessage;
+      whatsappMsg = whatsappMsg.replace(/₹\s*[,.\s]*(?![0-9])/g, safeProduct.currentPrice);
+      if (!whatsappMsg.includes(safeProduct.currentPrice)) {
+        whatsappMsg = `🔥 *Price Drop Alert!*\n*${safeProduct.title}*\n\n💰 *Deal Price:* ${safeProduct.currentPrice} ~(${safeProduct.originalPrice})~ (${safeProduct.savingsAmount || safeProduct.discountPercent})\n\n👉 Grab Deal: ${safeProduct.affiliateUrl}`;
+      }
+
+      let telegramMsg = parsed.telegramMarkdown || fallback.telegramMarkdown;
+      telegramMsg = telegramMsg.replace(/₹\s*[,.\s]*(?![0-9])/g, safeProduct.currentPrice);
+
+      let tweetText = parsed.tweetText || fallback.tweetText;
+      tweetText = tweetText.replace(/₹\s*[,.\s]*(?![0-9])/g, safeProduct.currentPrice);
+
       let pinPrice = parsed.pinPriceTag || safeProduct.currentPrice;
-      if (!pinPrice || !/\d/.test(pinPrice) || pinPrice.trim() === '₹,') {
+      if (!pinPrice || !/\d/.test(pinPrice)) {
         pinPrice = safeProduct.currentPrice;
       }
 
       return {
-        category: 'fashion',
-        pinterestTitle: parsed.pinterestTitle || `Stylist Pick: ${safeProduct.title.slice(0, 50)}`,
-        pinterestDescription: parsed.pinterestDescription || this.generateFallbackFashion(safeProduct).pinterestDescription,
-        pinBadgeText: parsed.pinBadgeText || 'MUST-HAVE LOOK',
+        category,
+        bloggerTitle: parsed.bloggerTitle || fallback.bloggerTitle,
+        bloggerHtmlBody: parsed.bloggerHtmlBody || fallback.bloggerHtmlBody,
+        telegramMarkdown: telegramMsg,
+        whatsappMessage: whatsappMsg,
+        tweetText: tweetText,
+        pinterestTitle: parsed.pinterestTitle || fallback.pinterestTitle,
+        pinterestDescription: parsed.pinterestDescription || fallback.pinterestDescription,
+        pinBadgeText: parsed.pinBadgeText || fallback.pinBadgeText,
         pinPriceTag: pinPrice,
         pinterestTags: Array.isArray(parsed.pinterestTags) && parsed.pinterestTags.length > 0
           ? parsed.pinterestTags
-          : ['#MensFashion', '#OOTDMen', '#StreetwearLook', '#MensStyle'],
+          : fallback.pinterestTags,
       };
     } catch {
-      return this.generateFallbackFashion(safeProduct);
+      return this.generateFallbackOmnichannel(safeProduct, category);
     }
   }
 
   /**
-   * Resilient offline fallback generator producing full 1000+ word review with embedded images
+   * Compatibility wrapper for Electronics
    */
-  generateFallbackElectronics(p: ProductMetadata): GeneratedContent {
+  async generateElectronicsDeal(product: ProductMetadata): Promise<GeneratedContent> {
+    return this.generateOmnichannelDeal(product, 'electronics');
+  }
+
+  /**
+   * Compatibility wrapper for Fashion
+   */
+  async generateFashionPin(product: ProductMetadata): Promise<GeneratedContent> {
+    return this.generateOmnichannelDeal(product, 'fashion');
+  }
+
+  /**
+   * Universal offline fallback generator producing all 5 channel outputs
+   */
+  generateFallbackOmnichannel(p: ProductMetadata, category: DealCategory = 'general'): GeneratedContent {
     const safeP = this.normalizeProduct(p);
     const platformName = safeP.platform.charAt(0).toUpperCase() + safeP.platform.slice(1);
 
@@ -347,7 +315,7 @@ Return ONLY valid JSON matching this exact structure:
   <!-- Hero Product Image -->
   <div style="text-align: center; margin: 28px 0;">
     <img src="${safeP.imageUrl}" alt="${safeP.title}" style="max-width: 100%; max-height: 460px; object-fit: contain; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); background: #ffffff; padding: 16px; border: 1px solid #e2e8f0;" />
-    <p style="color: #64748b; font-size: 13px; margin-top: 8px;">Featured: ${safeP.title} High-Resolution Product Showcase</p>
+    <p style="color: #64748b; font-size: 13px; margin-top: 8px;">Featured: ${safeP.title} Official Product Showcase</p>
   </div>
 
   <!-- Deal & Pricing Overview Box -->
@@ -429,27 +397,25 @@ Return ONLY valid JSON matching this exact structure:
 `;
 
     return {
-      category: 'electronics',
+      category,
       bloggerTitle: `${safeP.title} Review & Lowest Price Deal (2026)`,
       bloggerHtmlBody: bloggerHtml.trim(),
       telegramMarkdown: `🔥 *LOOT DEAL ALERT* 🔥\n\n*${safeP.title.replace(/[*_`]/g, '')}*\n\n💰 *Deal Price:* ${safeP.currentPrice} ~(${safeP.originalPrice})~\n📉 *Offer:* ${safeP.dealScore || safeP.discountPercent}\n\n⚡ *Highlights:*\n• Best price in this segment\n• 100% Genuine with official warranty\n• High customer rating\n\n🛒 *Grab Deal Before Price Increases:*\n👉 ${safeP.affiliateUrl}`,
       whatsappMessage: `🔥 *Price Drop Alert!*\nGet *${safeP.title}* for just *${safeP.currentPrice}* (${safeP.savingsAmount || safeP.discountPercent}) on ${platformName}!\n\n👉 Grab it now: ${safeP.affiliateUrl}`,
-      tweetText: `⚡ Price drop alert! Get ${safeP.title.slice(0, 80)} for just ${safeP.currentPrice} (${safeP.discountPercent || 'Save big'}) on #${platformName}!\n\nGrab deal 👉 ${safeP.affiliateUrl}\n#TechDeals #Deals #Shopping`,
+      tweetText: `⚡ Price drop alert! Get ${safeP.title.slice(0, 80)} for just ${safeP.currentPrice} (${safeP.discountPercent || 'Save big'}) on #${platformName}!\n\nGrab deal 👉 ${safeP.affiliateUrl}\n#Deals #Shopping #Discount`,
+      pinterestTitle: `Top Pick 2026: ${safeP.title.slice(0, 40)} | ${safeP.discountPercent}`,
+      pinterestDescription: `Check out this top-rated deal on ${platformName}. Highly recommended for quality, durability, and massive savings. Tap to shop directly.`,
+      pinBadgeText: 'TOP RATED DEAL',
+      pinPriceTag: safeP.currentPrice,
+      pinterestTags: ['#AmazonDeals', '#BestPrice', '#ShoppingInspo', '#OnlineDeals', '#SmartShopping'],
     };
   }
 
-  /**
-   * Resilient offline fallback generator for Fashion pins
-   */
+  generateFallbackElectronics(p: ProductMetadata): GeneratedContent {
+    return this.generateFallbackOmnichannel(p, 'electronics');
+  }
+
   generateFallbackFashion(p: ProductMetadata): GeneratedContent {
-    const safeP = this.normalizeProduct(p);
-    return {
-      category: 'fashion',
-      pinterestTitle: `Minimalist Style Pick: ${safeP.title.slice(0, 45)}`,
-      pinterestDescription: `Upgrade your daily wardrobe with this versatile piece. Pair with neutral tones and clean footwear for an effortlessly elevated aesthetic. Tap to shop directly.`,
-      pinBadgeText: 'TRENDING LOOK',
-      pinPriceTag: safeP.currentPrice,
-      pinterestTags: ['#MensFashion', '#OOTDMen', '#MensStyle', '#CapsuleWardrobe', '#AffordableStyle'],
-    };
+    return this.generateFallbackOmnichannel(p, 'fashion');
   }
 }

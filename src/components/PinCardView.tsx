@@ -10,6 +10,7 @@ export interface PinCardViewProps {
   discountPercent?: string;
   imageUrl: string;
   platform?: 'amazon' | 'flipkart' | 'myntra' | 'other';
+  ctaText?: string;
   width?: number;
   height?: number;
 }
@@ -18,12 +19,13 @@ export const PinCardView = forwardRef<View, PinCardViewProps>(
   (
     {
       title,
-      badgeText = 'MUST-HAVE LOOK',
+      badgeText = 'TOP RATED DEAL',
       priceTag,
       originalPrice,
       discountPercent = 'HOT DEAL',
       imageUrl,
       platform = 'other',
+      ctaText = 'TAP TO SHOP DEAL →',
       width = 320,
       height = 480, // Strict 2:3 aspect ratio (320x480 default -> scales cleanly)
     },
@@ -31,7 +33,14 @@ export const PinCardView = forwardRef<View, PinCardViewProps>(
   ) => {
     // Format numeric price
     const cleanPrice = priceTag.replace(/[^0-9,]/g, '') || priceTag;
-    const platformLabel = platform === 'myntra' ? 'MYNTRA' : platform === 'amazon' ? 'AMAZON' : platform === 'flipkart' ? 'FLIPKART' : 'STORE';
+    const platformLabel =
+      platform === 'myntra'
+        ? 'MYNTRA'
+        : platform === 'amazon'
+        ? 'AMAZON'
+        : platform === 'flipkart'
+        ? 'FLIPKART'
+        : 'ONLINE DEAL';
 
     return (
       <View
@@ -48,7 +57,7 @@ export const PinCardView = forwardRef<View, PinCardViewProps>(
 
         {/* Top Floating Badges Bar */}
         <View style={styles.topBadgeRow}>
-          {/* Trend / Style Vibe Badge */}
+          {/* Trend / Deal Badge */}
           <View style={styles.vibeBadge}>
             <Text style={styles.vibeBadgeText}>✨ {badgeText.toUpperCase()}</Text>
           </View>
@@ -86,7 +95,7 @@ export const PinCardView = forwardRef<View, PinCardViewProps>(
 
           {/* High-Converting CTA Button */}
           <View style={styles.ctaBar}>
-            <Text style={styles.ctaText}>TAP TO SHOP THE LOOK &rarr;</Text>
+            <Text style={styles.ctaText}>{ctaText.toUpperCase()}</Text>
           </View>
         </View>
       </View>
@@ -124,12 +133,12 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   vibeBadge: {
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: theme.radii.full,
     borderWidth: 1,
-    borderColor: 'rgba(236, 72, 153, 0.6)', // Accent Magenta border
+    borderColor: 'rgba(236, 72, 153, 0.6)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
@@ -143,7 +152,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   platformBadge: {
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: theme.radii.full,
@@ -151,8 +160,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   platformBadgeText: {
-    color: '#F8FAFC',
-    fontSize: 10,
+    color: '#E2E8F0',
+    fontSize: theme.typography.sizes.xxs,
     fontWeight: theme.typography.weights.bold,
     letterSpacing: 0.8,
   },
@@ -161,78 +170,79 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    backgroundColor: 'rgba(10, 15, 28, 0.94)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 18,
-    backgroundColor: 'rgba(11, 15, 23, 0.92)',
-    borderTopLeftRadius: theme.radii.lg,
-    borderTopRightRadius: theme.radii.lg,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    gap: 8,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
   },
   priceContainer: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'flex-start',
   },
   currencySymbol: {
-    color: theme.colors.accentDeal,
-    fontSize: theme.typography.sizes.lg,
-    fontWeight: theme.typography.weights.black,
-    marginRight: 1,
+    color: '#10B981',
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 2,
+    marginRight: 2,
   },
   priceValue: {
-    color: theme.colors.accentDeal,
-    fontSize: theme.typography.sizes.xxl,
-    fontWeight: theme.typography.weights.black,
+    color: '#10B981',
+    fontSize: 26,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
     letterSpacing: -0.5,
   },
   originalPriceText: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.sizes.sm,
+    color: '#94A3B8',
+    fontSize: 14,
     textDecorationLine: 'line-through',
-    fontWeight: theme.typography.weights.medium,
+    fontVariant: ['tabular-nums'],
+    marginLeft: 4,
   },
   discountPill: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: 'rgba(245, 158, 11, 0.18)',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: theme.radii.sm,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.5)',
+    marginLeft: 'auto',
   },
   discountText: {
-    color: '#000000',
-    fontSize: 10,
-    fontWeight: theme.typography.weights.black,
+    color: '#FBBF24',
+    fontSize: 11,
+    fontWeight: '800',
     letterSpacing: 0.4,
   },
   titleText: {
-    color: '#FFFFFF',
-    fontSize: theme.typography.sizes.base,
-    fontWeight: theme.typography.weights.bold,
-    lineHeight: 20,
-    marginBottom: 12,
+    color: '#F8FAFC',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 19,
     letterSpacing: 0.1,
   },
   ctaBar: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: '#6366F1',
     paddingVertical: 10,
     borderRadius: theme.radii.md,
     alignItems: 'center',
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 4,
+    justifyContent: 'center',
+    marginTop: 4,
+    ...theme.shadows.glowPrimary,
   },
   ctaText: {
     color: '#FFFFFF',
-    fontSize: theme.typography.sizes.xs,
-    fontWeight: theme.typography.weights.black,
-    letterSpacing: 1,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.8,
   },
 });
