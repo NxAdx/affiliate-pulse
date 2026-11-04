@@ -68,6 +68,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   earnkaroToken: '',
   bloggerBlogId: '',
   bloggerAccessToken: '',
+  bloggerWebhookUrl: 'https://script.google.com/macros/s/AKfycbxh1BaXpDleljcWtTW_WSTtO-ks7UfQYQ78TkLVnYbpdgW15EiB5RycAIhgruAiRZPQ/exec',
   bloggerEmail: '',
   telegramBotToken: '',
   telegramChannelId: '',

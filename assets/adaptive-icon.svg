@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 432 432" width="432" height="432">
+  <defs>
+    <!-- Electric Pulse Gradient -->
+    <linearGradient id="pulseGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6366F1" />
+      <stop offset="45%" stop-color="#818CF8" />
+      <stop offset="70%" stop-color="#34D399" />
+      <stop offset="100%" stop-color="#10B981" />
+    </linearGradient>
+
+    <!-- Subtle Drop Shadow -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+
+  <!-- Scaled Glyph inside Android Adaptive Safe Circle (264x264 center at 216,216) -->
+  <g transform="translate(216, 216) scale(0.38) rotate(-45) translate(-512, -512)" filter="url(#shadow)">
+    <!-- Left Loop -->
+    <path d="M 390 350 
+             L 300 350 
+             A 160 160 0 0 0 300 670 
+             L 390 670" 
+          fill="none" 
+          stroke="#6366F1" 
+          stroke-width="72" 
+          stroke-linecap="round" />
+
+    <!-- Right Loop -->
+    <path d="M 634 350 
+             L 724 350 
+             A 160 160 0 0 1 724 670 
+             L 634 670" 
+          fill="none" 
+          stroke="#10B981" 
+          stroke-width="72" 
+          stroke-linecap="round" />
+
+    <!-- Pulse Bridge -->
+    <path d="M 290 510 
+             L 430 510 
+             L 475 390 
+             L 545 630 
+             L 590 510 
+             L 734 510" 
+          fill="none" 
+          stroke="url(#pulseGrad)" 
+          stroke-width="52" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" />
+
+    <circle cx="475" cy="390" r="16" fill="#818CF8" />
+    <circle cx="545" cy="630" r="16" fill="#34D399" />
+  </g>
+</svg>

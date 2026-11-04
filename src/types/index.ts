@@ -76,6 +76,7 @@ export interface AppSettings {
   earnkaroToken: string;
   bloggerBlogId: string;
   bloggerAccessToken: string;
+  bloggerWebhookUrl?: string;
   bloggerEmail?: string;
   telegramBotToken: string;
   telegramChannelId: string;

@@ -16,17 +16,181 @@ export class BloggerService {
   }
 
   /**
-   * Tests Blogger connection and validates Blog ID and OAuth Access Token
+   * Tests Google Apps Script Webhook connection
+   */
+  static async testWebhook(
+    webhookUrl: string,
+    blogId?: string
+  ): Promise<{ success: boolean; blogName?: string; blogUrl?: string; error?: string }> {
+    if (!webhookUrl || !webhookUrl.trim()) {
+      return { success: false, error: 'Please enter your Google Apps Script Webhook URL' };
+    }
+
+    const cleanUrl = webhookUrl.trim();
+    if (!cleanUrl.startsWith('https://script.google.com/macros/s/')) {
+      return {
+        success: false,
+        error: 'Invalid Webhook URL. It must begin with https://script.google.com/macros/s/.../exec',
+      };
+    }
+
+    try {
+      const response = await fetch(cleanUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          test: true,
+          blogId: blogId?.trim() || '',
+        }),
+        redirect: 'follow',
+      });
+
+      const rawText = await response.text();
+
+      // Check for Google Accounts sign-in challenge (caused when "Who has access" is not set to "Anyone")
+      if (
+        response.status === 401 ||
+        rawText.includes('Sign in - Google Accounts') ||
+        rawText.includes('accounts.google.com')
+      ) {
+        return {
+          success: false,
+          error:
+            '⚠️ Google Sign-In Required: In script.google.com -> Deploy -> Manage Deployments -> Edit -> set "Who has access" to "Anyone" (not "Only myself") and deploy as "New version".',
+        };
+      }
+
+      try {
+        const json = JSON.parse(rawText);
+        if (json.success === false) {
+          return {
+            success: false,
+            error: json.error || 'Apps Script returned an error',
+          };
+        }
+        return {
+          success: true,
+          blogName: json.blogName || 'Google Apps Script Webhook Active',
+          blogUrl: json.blogUrl || cleanUrl,
+        };
+      } catch {
+        // If it returned 200/302 HTML or plain text without sign-in block
+        if (response.ok) {
+          return {
+            success: true,
+            blogName: 'Google Apps Script Webhook Connected',
+            blogUrl: cleanUrl,
+          };
+        }
+        return {
+          success: false,
+          error: `Webhook returned status ${response.status}: ${rawText.substring(0, 150)}`,
+        };
+      }
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err?.message || 'Network error reaching Google Apps Script Webhook',
+      };
+    }
+  }
+
+  /**
+   * Publishes formatted HTML review to Google Blogger via Google Apps Script Webhook
+   * (Permanent 100% direct publishing - zero token expiry!)
+   */
+  static async publishViaWebhook(
+    webhookUrl: string,
+    blogId: string,
+    payload: BloggerPostPayload
+  ): Promise<{ success: boolean; url?: string; error?: string }> {
+    if (!webhookUrl || !webhookUrl.trim()) {
+      return { success: false, error: 'Missing Google Apps Script Webhook URL' };
+    }
+
+    try {
+      const response = await fetch(webhookUrl.trim(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          blogId: blogId?.trim() || '',
+          title: payload.title,
+          content: payload.content,
+          labels: payload.labels || ['Product Review', 'Deals', 'Tech'],
+        }),
+        redirect: 'follow',
+      });
+
+      const rawText = await response.text();
+
+      // Check for Google Accounts sign-in challenge
+      if (
+        response.status === 401 ||
+        rawText.includes('Sign in - Google Accounts') ||
+        rawText.includes('accounts.google.com')
+      ) {
+        return {
+          success: false,
+          error:
+            '⚠️ Google Sign-In Required: In script.google.com -> Deploy -> Manage Deployments -> Edit -> set "Who has access" to "Anyone" and deploy as "New version".',
+        };
+      }
+
+      try {
+        const json = JSON.parse(rawText);
+        if (json.success === false) {
+          return {
+            success: false,
+            error: json.error || 'Apps script reported an error publishing to Blogger',
+          };
+        }
+        return {
+          success: true,
+          url: json.url || (blogId ? `https://www.blogger.com/blog/posts/${blogId.trim()}` : undefined),
+        };
+      } catch {
+        if (response.ok) {
+          return {
+            success: true,
+            url: blogId ? `https://www.blogger.com/blog/posts/${blogId.trim()}` : undefined,
+          };
+        }
+        return {
+          success: false,
+          error: `Publish failed (${response.status}): ${rawText.substring(0, 200)}`,
+        };
+      }
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err?.message || 'Network error reaching Blogger Webhook',
+      };
+    }
+  }
+
+  /**
+   * Tests Blogger connection (supports Webhook URL or OAuth Access Token)
    */
   static async testConnection(
     blogId: string,
-    accessToken: string
+    accessToken?: string,
+    webhookUrl?: string
   ): Promise<{ success: boolean; blogName?: string; blogUrl?: string; error?: string }> {
+    // If Webhook URL is configured, test the Webhook
+    if (webhookUrl && webhookUrl.trim()) {
+      return this.testWebhook(webhookUrl, blogId);
+    }
+
+    // Otherwise fallback to OAuth testing
     if (!blogId || !blogId.trim()) {
       return { success: false, error: 'Please enter your numeric Blogger Blog ID' };
     }
     if (!accessToken || !accessToken.trim()) {
-      return { success: false, error: 'Please enter your Blogger OAuth Access Token' };
+      return { success: false, error: 'Please enter your Blogger OAuth Access Token or Webhook URL' };
     }
 
     const token = accessToken.trim();
@@ -34,7 +198,7 @@ export class BloggerService {
       return {
         success: false,
         error:
-          '⚠️ You entered a Google API Key instead of an OAuth 2.0 Access Token. Blogger posting requires an OAuth Bearer token (starts with "ya29..."). Tap the OAuth Playground link above to generate one.',
+          '⚠️ You entered a Google API Key instead of an OAuth 2.0 Access Token. Blogger posting requires an OAuth Bearer token (starts with "ya29..."). Use the Webhook URL above for permanent publishing!',
       };
     }
 
@@ -57,7 +221,7 @@ export class BloggerService {
             return {
               success: false,
               error:
-                '❌ OAuth Token Expired or Invalid (401). Please click OAuth Playground to generate a fresh token.',
+                '❌ OAuth Token Expired or Invalid (401). Use the Google Apps Script Webhook above for permanent zero-expiry publishing.',
             };
           }
           if (errJson?.error?.code === 404) {
@@ -84,18 +248,26 @@ export class BloggerService {
   }
 
   /**
-   * Publishes formatted HTML review to Google Blogger via API v3
+   * Publishes formatted HTML review to Google Blogger
+   * Automatically uses Google Apps Script Webhook if configured, otherwise falls back to OAuth v3
    */
   static async publishPost(
     blogId: string,
     accessToken: string,
-    payload: BloggerPostPayload
+    payload: BloggerPostPayload,
+    webhookUrl?: string
   ): Promise<{ success: boolean; url?: string; error?: string }> {
+    // 1. If Webhook URL is configured, use it directly (Permanent & Zero Expiry!)
+    if (webhookUrl && webhookUrl.trim()) {
+      return this.publishViaWebhook(webhookUrl, blogId, payload);
+    }
+
+    // 2. Otherwise fallback to OAuth v3 API
     if (!blogId || !accessToken) {
       return {
         success: false,
         error:
-          'Missing Blogger Blog ID or Access Token. Tap "Copy HTML" to publish manually, or configure tokens in Settings.',
+          'Missing Blogger Webhook URL or OAuth Access Token. Tap "Copy HTML" to publish manually, or configure Webhook URL in Settings.',
       };
     }
 
@@ -104,7 +276,7 @@ export class BloggerService {
       return {
         success: false,
         error:
-          '⚠️ You entered a Google API Key instead of an OAuth token. Blogger API rejects API keys for writing posts. Use "Copy HTML" to paste directly, or get an OAuth token via OAuth Playground.',
+          '⚠️ You entered a Google API Key instead of an OAuth token. Blogger API rejects API keys for writing posts. Configure the Google Apps Script Webhook in Settings for 100% direct publishing.',
       };
     }
 
@@ -133,7 +305,7 @@ export class BloggerService {
           const errJson = JSON.parse(errorText);
           if (errJson?.error?.code === 401) {
             message =
-              'Google OAuth Access Token expired or invalid (401). Please copy the HTML article and paste it directly into your Blogger dashboard, or grab a new token from OAuth Playground.';
+              'Google OAuth Access Token expired (401). Use the Google Apps Script Webhook in Settings for permanent zero-expiry publishing.';
           } else if (errJson?.error?.message) {
             message = errJson.error.message;
           }
