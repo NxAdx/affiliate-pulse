@@ -13,6 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
@@ -448,34 +449,18 @@ export default function GeneratorScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Top Engine Status Header */}
-      <View style={styles.topBar}>
-        <View style={styles.engineBadge}>
-          <Ionicons
-            name={settings.geminiApiKey ? 'sparkles' : 'flash-outline'}
-            size={13}
-            color={settings.geminiApiKey ? theme.colors.primaryLight : theme.colors.accentWarning}
-          />
-          <Text style={styles.engineBadgeText}>
-            {settings.geminiApiKey ? 'GEMINI OMNICHANNEL ENGINE' : 'OFFLINE HIGH-PRECISION ENGINE'}
-          </Text>
-        </View>
-        <View style={styles.vaultPill}>
-          <Ionicons name="shield-checkmark" size={11} color={theme.colors.accentDeal} />
-          <Text style={styles.vaultPillText}>REA HIGH-RES VERIFIED</Text>
-        </View>
-      </View>
+      
 
       {/* Universal Flexible Deal Hunter Card */}
       <View style={styles.autoHunterCard}>
         <View style={styles.autoHunterHeader}>
           <View style={styles.autoHunterTitleRow}>
-            <Ionicons name="sparkles" size={17} color={theme.colors.accentDeal} />
-            <Text style={styles.autoHunterTitle}>Universal Deal Hunter</Text>
+            <Ionicons name="compass-outline" size={18} color={theme.colors.primaryLight} />
+            <Text style={styles.autoHunterTitle}>Deal Discovery</Text>
           </View>
           <View style={styles.priorityBadge}>
             <Text style={styles.priorityBadgeText}>
-              ANY PRODUCT • ≥{minDiscountFilter}% OFF
+              {minDiscountFilter}%+ OFF
             </Text>
           </View>
         </View>
@@ -548,7 +533,10 @@ export default function GeneratorScreen() {
         {/* 1-Tap Auto-Hunt Trigger */}
         <TouchableOpacity
           style={[styles.autoHunterBtn, isHunting && styles.buttonDisabled]}
-          onPress={handleAutoHuntDeal}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            handleAutoHuntDeal();
+          }}
           disabled={isHunting || isProcessing}
           activeOpacity={0.85}
         >
@@ -556,11 +544,11 @@ export default function GeneratorScreen() {
             <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
             <View style={styles.autoHunterBtnInner}>
-              <Ionicons name="flash" size={16} color="#FFFFFF" />
+              <Ionicons name="search" size={15} color="#FFFFFF" />
               <Text style={styles.autoHunterBtnText}>
                 {huntKeyword.trim()
-                  ? `⚡ Auto-Hunt "${huntKeyword.trim()}" (≥${minDiscountFilter}% Off)`
-                  : `⚡ Auto-Hunt ${selectedCategory.toUpperCase()} Deal (≥${minDiscountFilter}% Off)`}
+                  ? `Find "${huntKeyword.trim()}" Deals`
+                  : `Find ${selectedCategory === 'all' ? 'Top' : selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)} Deals`}
               </Text>
             </View>
           )}
@@ -570,7 +558,7 @@ export default function GeneratorScreen() {
       {/* Direct URL Input Box (Accepts Amazon, Flipkart, Myntra) */}
       <View style={styles.inputCard}>
         <View style={styles.inputLabelRow}>
-          <Text style={styles.inputLabel}>Direct Product URL / Shortlink</Text>
+          <Text style={styles.inputLabel}>Direct Product Link</Text>
           <TouchableOpacity onPress={handlePasteClipboard} style={styles.pasteBtn} activeOpacity={0.7}>
             <Ionicons name="clipboard-outline" size={13} color={theme.colors.primaryLight} />
             <Text style={styles.pasteBtnText}>Paste</Text>
@@ -596,17 +584,20 @@ export default function GeneratorScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.primaryButton, isProcessing && styles.buttonDisabled]}
-          onPress={handleGenerate}
+          style={[styles.secondaryActionButton, isProcessing && styles.buttonDisabled]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            handleGenerate();
+          }}
           disabled={isProcessing}
           activeOpacity={0.85}
         >
           {isProcessing ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
+            <ActivityIndicator color={theme.colors.primaryLight} size="small" />
           ) : (
-            <View style={styles.primaryButtonInner}>
-              <Ionicons name="flash" size={18} color="#FFFFFF" />
-              <Text style={styles.primaryButtonText}>Generate All 5 Channels</Text>
+            <View style={styles.secondaryActionButtonInner}>
+              <Ionicons name="layers-outline" size={15} color={theme.colors.primaryLight} />
+              <Text style={styles.secondaryActionButtonText}>Generate Omnichannel Pack</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -1180,6 +1171,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     padding: 16,
     borderRadius: theme.radii.lg,
+    borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: theme.colors.borderSubtle,
     marginBottom: 16,
@@ -1221,6 +1213,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: theme.colors.background,
     borderRadius: theme.radii.md,
+    borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: theme.colors.borderSubtle,
     paddingHorizontal: 12,
@@ -1372,6 +1365,27 @@ const styles = StyleSheet.create({
   },
   clearBtn: {
     padding: 4,
+  },
+  secondaryActionButton: {
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: theme.colors.borderActive,
+    borderRadius: theme.radii.md,
+    borderCurve: 'continuous',
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryActionButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  secondaryActionButtonText: {
+    color: theme.colors.primaryLight,
+    fontSize: theme.typography.sizes.xs,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   primaryButton: {
     backgroundColor: theme.colors.primary,

@@ -10,10 +10,14 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useAppStore } from '../../store/useAppStore';
 import { theme } from '../../theme';
 import { BloggerService } from '../../services/bloggerApi';
 import { TelegramService } from '../../services/telegramBot';
+
+const DEFAULT_WEBHOOK =
+  'https://script.google.com/macros/s/AKfycbxh1BaXpDleljcWtTW_WSTtO-ks7UfQYQ78TkLVnYbpdgW15EiB5RycAIhgruAiRZPQ/exec';
 
 interface PortalLinkProps {
   label: string;
@@ -24,11 +28,16 @@ function PortalLink({ label, url }: PortalLinkProps) {
   return (
     <TouchableOpacity
       style={styles.portalLink}
-      onPress={() => Linking.openURL(url)}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        Linking.openURL(url);
+      }}
       activeOpacity={0.7}
     >
-      <Text style={styles.portalLinkText}>{label}</Text>
-      <Ionicons name="open-outline" size={12} color={theme.colors.primaryLight} />
+      <Text style={styles.portalLinkText} numberOfLines={1}>
+        {label}
+      </Text>
+      <Ionicons name="arrow-forward" size={10} color={theme.colors.primaryLight} />
     </TouchableOpacity>
   );
 }
@@ -43,7 +52,11 @@ export default function SettingsScreen() {
   const [bloggerBlogId, setBloggerBlogId] = useState(settings.bloggerBlogId);
   const [bloggerToken, setBloggerToken] = useState(settings.bloggerAccessToken);
   const [bloggerEmail, setBloggerEmail] = useState(settings.bloggerEmail || '');
-  const [bloggerWebhookUrl, setBloggerWebhookUrl] = useState(settings.bloggerWebhookUrl || '');
+  const [bloggerWebhookUrl, setBloggerWebhookUrl] = useState(
+    settings.bloggerWebhookUrl?.trim() || DEFAULT_WEBHOOK
+  );
+  const [showLegacyBlogger, setShowLegacyBlogger] = useState(false);
+
   const [telegramToken, setTelegramToken] = useState(settings.telegramBotToken);
   const [telegramChannel, setTelegramChannel] = useState(settings.telegramChannelId);
 
@@ -69,12 +82,13 @@ export default function SettingsScreen() {
     setBloggerBlogId(settings.bloggerBlogId);
     setBloggerToken(settings.bloggerAccessToken);
     setBloggerEmail(settings.bloggerEmail || '');
-    setBloggerWebhookUrl(settings.bloggerWebhookUrl || '');
+    setBloggerWebhookUrl(settings.bloggerWebhookUrl?.trim() || DEFAULT_WEBHOOK);
     setTelegramToken(settings.telegramBotToken);
     setTelegramChannel(settings.telegramChannelId);
   }, [settings]);
 
   const handleSave = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     updateSettings({
       geminiApiKey: geminiApiKey.trim(),
       amazonAffiliateTag: amazonTag.trim(),
@@ -83,7 +97,7 @@ export default function SettingsScreen() {
       bloggerBlogId: bloggerBlogId.trim(),
       bloggerAccessToken: bloggerToken.trim(),
       bloggerEmail: bloggerEmail.trim(),
-      bloggerWebhookUrl: bloggerWebhookUrl.trim(),
+      bloggerWebhookUrl: bloggerWebhookUrl.trim() || DEFAULT_WEBHOOK,
       telegramBotToken: telegramToken.trim(),
       telegramChannelId: telegramChannel.trim(),
     });
@@ -92,14 +106,16 @@ export default function SettingsScreen() {
   };
 
   const handleTestBlogger = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsTestingBlogger(true);
     setBloggerTestResult(null);
     try {
-      const res = await BloggerService.testConnection(bloggerBlogId, bloggerToken, bloggerWebhookUrl);
+      const activeWebhook = bloggerWebhookUrl.trim() || DEFAULT_WEBHOOK;
+      const res = await BloggerService.testConnection(bloggerBlogId, bloggerToken, activeWebhook);
       if (res.success) {
         setBloggerTestResult({
           success: true,
-          message: `Connected: "${res.blogName}" (${res.blogUrl || 'Ready to publish!'})`,
+          message: `Connected: "${res.blogName}" (Ready for 1-tap publishing)`,
         });
       } else {
         setBloggerTestResult({
@@ -118,6 +134,7 @@ export default function SettingsScreen() {
   };
 
   const handleTestTelegram = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsTestingTelegram(true);
     setTelegramTestResult(null);
     try {
@@ -138,21 +155,21 @@ export default function SettingsScreen() {
       {/* Header Info Banner */}
       <View style={styles.vaultBanner}>
         <View style={styles.vaultIconWrap}>
-          <Ionicons name="shield-checkmark" size={20} color={theme.colors.accentDeal} />
+          <Ionicons name="shield-checkmark" size={18} color={theme.colors.accentDeal} />
         </View>
         <View style={styles.vaultTextWrap}>
           <Text style={styles.vaultTitle}>Encrypted Local Storage</Text>
-          <Text style={styles.vaultSub}>Credentials are persisted offline via MMKV vault.</Text>
+          <Text style={styles.vaultSub}>All API credentials persisted securely in MMKV vault.</Text>
         </View>
         <View style={styles.statusPill}>
-          <Text style={styles.statusPillText}>MMKV ACTIVE</Text>
+          <Text style={styles.statusPillText}>ACTIVE</Text>
         </View>
       </View>
 
       {savedFeedback && (
         <View style={styles.feedbackBanner}>
-          <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
-          <Text style={styles.feedbackText}>Settings saved to secure vault!</Text>
+          <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+          <Text style={styles.feedbackText}>Configuration saved to offline vault</Text>
         </View>
       )}
 
@@ -160,19 +177,19 @@ export default function SettingsScreen() {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleRow}>
-            <Ionicons name="sparkles" size={18} color={theme.colors.primaryLight} />
+            <Ionicons name="sparkles-outline" size={16} color={theme.colors.primaryLight} />
             <Text style={styles.cardTitle}>AI Engine (Google Gemini)</Text>
           </View>
-          <PortalLink label="Get Gemini Key" url="https://aistudio.google.com/app/apikey" />
+          <PortalLink label="Get Key" url="https://aistudio.google.com/app/apikey" />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Gemini API Key</Text>
           <View style={styles.inputWrapper}>
-            <Ionicons name="key-outline" size={16} color={theme.colors.textMuted} style={styles.inputIcon} />
+            <Ionicons name="key-outline" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
             <TextInput
               style={styles.inputWithIcon}
-              placeholder="Paste AI Studio API Key (AIzaSy...)"
+              placeholder="Paste AI Studio Key (AIzaSy...)"
               placeholderTextColor={theme.colors.textMuted}
               value={geminiApiKey}
               onChangeText={setGeminiApiKey}
@@ -181,7 +198,7 @@ export default function SettingsScreen() {
               secureTextEntry
             />
           </View>
-          <Text style={styles.helperText}>Used for generating 1200+ word SEO articles, Telegram alerts & Pinterest styling.</Text>
+          <Text style={styles.helperText}>Powers automated reviews, Telegram hooks & Pinterest tags.</Text>
         </View>
       </View>
 
@@ -189,7 +206,7 @@ export default function SettingsScreen() {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleRow}>
-            <Ionicons name="pricetag" size={18} color={theme.colors.accentDeal} />
+            <Ionicons name="pricetag-outline" size={16} color={theme.colors.accentDeal} />
             <Text style={styles.cardTitle}>Affiliate Tracking Tags</Text>
           </View>
         </View>
@@ -197,11 +214,11 @@ export default function SettingsScreen() {
         {/* Amazon */}
         <View style={styles.inputGroup}>
           <View style={styles.labelRow}>
-            <Text style={styles.label}>Amazon Associate Tag</Text>
-            <PortalLink label="Amazon Associates Portal" url="https://affiliate-program.amazon.in/" />
+            <Text style={styles.label} numberOfLines={1}>Amazon Associate Tag</Text>
+            <PortalLink label="Portal ↗" url="https://affiliate-program.amazon.in/" />
           </View>
           <View style={styles.inputWrapper}>
-            <Ionicons name="logo-amazon" size={16} color={theme.colors.textMuted} style={styles.inputIcon} />
+            <Ionicons name="logo-amazon" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
             <TextInput
               style={styles.inputWithIcon}
               placeholder="e.g. yourtag-21"
@@ -217,11 +234,11 @@ export default function SettingsScreen() {
         {/* Flipkart */}
         <View style={styles.inputGroup}>
           <View style={styles.labelRow}>
-            <Text style={styles.label}>Flipkart Affiliate ID</Text>
-            <PortalLink label="Flipkart Portal" url="https://affiliate.flipkart.com/" />
+            <Text style={styles.label} numberOfLines={1}>Flipkart Affiliate ID</Text>
+            <PortalLink label="Portal ↗" url="https://affiliate.flipkart.com/" />
           </View>
           <View style={styles.inputWrapper}>
-            <Ionicons name="cart-outline" size={16} color={theme.colors.textMuted} style={styles.inputIcon} />
+            <Ionicons name="cart-outline" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
             <TextInput
               style={styles.inputWithIcon}
               placeholder="e.g. your_affiliate_id"
@@ -237,11 +254,11 @@ export default function SettingsScreen() {
         {/* EarnKaro */}
         <View style={styles.inputGroup}>
           <View style={styles.labelRow}>
-            <Text style={styles.label}>EarnKaro / Cuelinks Token (Fallback)</Text>
-            <PortalLink label="EarnKaro Profile" url="https://earnkaro.com/profile" />
+            <Text style={styles.label} numberOfLines={1}>EarnKaro / Cuelinks Token</Text>
+            <PortalLink label="Profile ↗" url="https://earnkaro.com/profile" />
           </View>
           <View style={styles.inputWrapper}>
-            <Ionicons name="link-outline" size={16} color={theme.colors.textMuted} style={styles.inputIcon} />
+            <Ionicons name="link-outline" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
             <TextInput
               style={styles.inputWithIcon}
               placeholder="Optional token for other merchants..."
@@ -259,20 +276,20 @@ export default function SettingsScreen() {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleRow}>
-            <Ionicons name="globe-outline" size={18} color={theme.colors.blogger} />
-            <Text style={styles.cardTitle}>Google Blogger (Blogspot)</Text>
+            <Ionicons name="globe-outline" size={16} color={theme.colors.blogger} />
+            <Text style={styles.cardTitle}>Google Blogger</Text>
           </View>
-          <PortalLink label="Blogger Admin" url="https://www.blogger.com/" />
+          <PortalLink label="Admin ↗" url="https://www.blogger.com/" />
         </View>
 
-        {/* RECOMMENDED METHOD: Google Apps Script Webhook (Direct & Permanent) */}
+        {/* 1. Google Apps Script Webhook (Primary Method - Permanent 1-Tap) */}
         <View style={styles.inputGroup}>
           <View style={styles.labelRow}>
-            <Text style={styles.label}>Apps Script Webhook (Never Expires ⭐)</Text>
-            <PortalLink label="Apps Script Console" url="https://script.google.com/" />
+            <Text style={styles.label} numberOfLines={1}>Publishing Webhook</Text>
+            <PortalLink label="Console ↗" url="https://script.google.com/" />
           </View>
           <View style={styles.inputWrapper}>
-            <Ionicons name="flash-outline" size={16} color={theme.colors.accentDeal} style={styles.inputIcon} />
+            <Ionicons name="flash-outline" size={15} color={theme.colors.accentDeal} style={styles.inputIcon} />
             <TextInput
               style={styles.inputWithIcon}
               placeholder="https://script.google.com/macros/s/.../exec"
@@ -284,46 +301,25 @@ export default function SettingsScreen() {
             />
           </View>
           <Text style={styles.helperText}>
-            Permanent direct publishing! Bypasses 60-min OAuth expiry. In Apps Script, set &quot;Who has access&quot; to &quot;Anyone&quot;.
+            Permanent 1-tap direct publishing. Bypasses 60-min OAuth expiration.
           </Text>
         </View>
 
+        {/* 2. Numeric Blog ID */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Blogger Blog ID</Text>
           <View style={styles.inputWrapper}>
-            <Ionicons name="newspaper-outline" size={16} color={theme.colors.textMuted} style={styles.inputIcon} />
+            <Ionicons name="newspaper-outline" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
             <TextInput
               style={styles.inputWithIcon}
-              placeholder="Numeric Blog ID from URL (e.g. 849302194810)"
+              placeholder="e.g. 4105733030604942075"
               placeholderTextColor={theme.colors.textMuted}
               value={bloggerBlogId}
               onChangeText={setBloggerBlogId}
               keyboardType="numeric"
             />
           </View>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <View style={styles.labelRow}>
-            <Text style={styles.label}>Blogger OAuth Access Token (API Publishing)</Text>
-            <PortalLink label="OAuth Playground" url="https://developers.google.com/oauthplayground/" />
-          </View>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="lock-closed-outline" size={16} color={theme.colors.textMuted} style={styles.inputIcon} />
-            <TextInput
-              style={styles.inputWithIcon}
-              placeholder="Paste ya29.a0... OAuth token"
-              placeholderTextColor={theme.colors.textMuted}
-              value={bloggerToken}
-              onChangeText={setBloggerToken}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
-            />
-          </View>
-          <Text style={styles.helperText}>
-            Requires Blogger v3 OAuth token (starts with ya29). Expires in 60 min.
-          </Text>
+          <Text style={styles.helperText}>Numeric identifier from your Blogger dashboard URL.</Text>
         </View>
 
         {/* Test Connection Button */}
@@ -337,7 +333,7 @@ export default function SettingsScreen() {
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <View style={styles.testBtnInner}>
-              <Ionicons name="shield-checkmark-outline" size={15} color="#FFFFFF" />
+              <Ionicons name="shield-checkmark-outline" size={14} color="#FFFFFF" />
               <Text style={styles.testBtnText}>Test Blogger Connection</Text>
             </View>
           )}
@@ -352,48 +348,88 @@ export default function SettingsScreen() {
           >
             <Ionicons
               name={bloggerTestResult.success ? 'checkmark-circle' : 'alert-circle'}
-              size={16}
+              size={15}
               color={bloggerTestResult.success ? theme.colors.accentDeal : '#EF4444'}
             />
             <Text style={styles.testResultText}>{bloggerTestResult.message}</Text>
           </View>
         )}
 
-        {/* Zero-OAuth Fallback: Secret Post Email */}
-        <View style={[styles.inputGroup, { marginTop: 14 }]}>
-          <Text style={styles.label}>Blogger Secret Post Email (Zero-OAuth Alternative)</Text>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="mail-outline" size={16} color={theme.colors.textMuted} style={styles.inputIcon} />
-            <TextInput
-              style={styles.inputWithIcon}
-              placeholder="yourblog.secretword@blogger.com"
-              placeholderTextColor={theme.colors.textMuted}
-              value={bloggerEmail}
-              onChangeText={setBloggerEmail}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-          <Text style={styles.helperText}>
-            Found in Blogger Settings → Email → "Post using email". Never expires!
+        {/* Collapsible Legacy OAuth & Email Drawer */}
+        <TouchableOpacity
+          style={styles.accordionToggle}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowLegacyBlogger(!showLegacyBlogger);
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.accordionToggleText}>
+            {showLegacyBlogger ? 'Hide Legacy OAuth & Email' : 'Legacy OAuth & Email Options'}
           </Text>
-        </View>
+          <Ionicons
+            name={showLegacyBlogger ? 'chevron-up' : 'chevron-down'}
+            size={13}
+            color={theme.colors.textMuted}
+          />
+        </TouchableOpacity>
+
+        {showLegacyBlogger && (
+          <View style={styles.legacyBox}>
+            <View style={styles.inputGroup}>
+              <View style={styles.labelRow}>
+                <Text style={styles.label} numberOfLines={1}>OAuth Access Token</Text>
+                <PortalLink label="OAuth ↗" url="https://developers.google.com/oauthplayground/" />
+              </View>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="lock-closed-outline" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.inputWithIcon}
+                  placeholder="Paste ya29... token"
+                  placeholderTextColor={theme.colors.textMuted}
+                  value={bloggerToken}
+                  onChangeText={setBloggerToken}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                />
+              </View>
+              <Text style={styles.helperText}>Requires refreshing every 60 minutes.</Text>
+            </View>
+
+            <View style={[styles.inputGroup, { marginBottom: 0 }]}>
+              <Text style={styles.label}>Post-by-Email Address</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="mail-outline" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.inputWithIcon}
+                  placeholder="yourblog.secretword@blogger.com"
+                  placeholderTextColor={theme.colors.textMuted}
+                  value={bloggerEmail}
+                  onChangeText={setBloggerEmail}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* SECTION 4: Telegram Channel */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleRow}>
-            <Ionicons name="paper-plane-outline" size={18} color={theme.colors.telegram} />
+            <Ionicons name="paper-plane-outline" size={16} color={theme.colors.telegram} />
             <Text style={styles.cardTitle}>Telegram Deal Channel</Text>
           </View>
-          <PortalLink label="BotFather" url="https://t.me/BotFather" />
+          <PortalLink label="BotFather ↗" url="https://t.me/BotFather" />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Telegram Bot Token</Text>
           <View style={styles.inputWrapper}>
-            <Ionicons name="hardware-chip-outline" size={16} color={theme.colors.textMuted} style={styles.inputIcon} />
+            <Ionicons name="hardware-chip-outline" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
             <TextInput
               style={styles.inputWithIcon}
               placeholder="e.g. 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
@@ -409,11 +445,11 @@ export default function SettingsScreen() {
 
         <View style={styles.inputGroup}>
           <View style={styles.labelRow}>
-            <Text style={styles.label}>Telegram Channel ID</Text>
-            <PortalLink label="Channel ID Bot" url="https://t.me/username_to_id_bot" />
+            <Text style={styles.label} numberOfLines={1}>Telegram Channel ID</Text>
+            <PortalLink label="ID Bot ↗" url="https://t.me/username_to_id_bot" />
           </View>
           <View style={styles.inputWrapper}>
-            <Ionicons name="megaphone-outline" size={16} color={theme.colors.textMuted} style={styles.inputIcon} />
+            <Ionicons name="megaphone-outline" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
             <TextInput
               style={styles.inputWithIcon}
               placeholder="e.g. -1001234567890 or @your_deal_channel"
@@ -438,7 +474,7 @@ export default function SettingsScreen() {
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <View style={styles.testBtnInner}>
-              <Ionicons name="paper-plane" size={15} color="#FFFFFF" />
+              <Ionicons name="paper-plane" size={14} color="#FFFFFF" />
               <Text style={styles.testBtnText}>Test Telegram Connection</Text>
             </View>
           )}
@@ -453,7 +489,7 @@ export default function SettingsScreen() {
           >
             <Ionicons
               name={telegramTestResult.success ? 'checkmark-circle' : 'alert-circle'}
-              size={16}
+              size={15}
               color={telegramTestResult.success ? theme.colors.accentDeal : '#EF4444'}
             />
             <Text style={styles.testResultText}>{telegramTestResult.message}</Text>
@@ -463,7 +499,7 @@ export default function SettingsScreen() {
 
       {/* SAVE BUTTON */}
       <TouchableOpacity style={styles.saveButton} onPress={handleSave} activeOpacity={0.85}>
-        <Ionicons name="save-outline" size={18} color="#FFFFFF" />
+        <Ionicons name="save-outline" size={16} color="#FFFFFF" />
         <Text style={styles.saveButtonText}>Save Configuration</Text>
       </TouchableOpacity>
     </ScrollView>
@@ -483,42 +519,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.surface,
-    padding: 14,
-    borderRadius: theme.radii.lg,
+    padding: 12,
+    borderRadius: theme.radii.md,
+    borderCurve: 'continuous',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
-    marginBottom: 16,
-    ...theme.shadows.glowDeal,
+    borderColor: theme.colors.borderSubtle,
+    marginBottom: 14,
+    gap: 10,
   },
   vaultIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: theme.radii.full,
+    width: 34,
+    height: 34,
+    borderRadius: theme.radii.sm,
+    borderCurve: 'continuous',
     backgroundColor: theme.colors.accentDealGlow,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
   vaultTextWrap: {
     flex: 1,
   },
   vaultTitle: {
     color: theme.colors.textPrimary,
-    fontSize: theme.typography.sizes.sm,
+    fontSize: theme.typography.sizes.xs,
     fontWeight: '700',
   },
   vaultSub: {
     color: theme.colors.textMuted,
-    fontSize: theme.typography.sizes.xxs,
+    fontSize: 11,
     marginTop: 2,
   },
   statusPill: {
     backgroundColor: theme.colors.accentDealGlow,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: theme.radii.full,
+    paddingVertical: 3,
+    borderRadius: theme.radii.xs,
+    borderCurve: 'continuous',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.4)',
+    borderColor: 'rgba(16, 185, 129, 0.25)',
   },
   statusPillText: {
     color: theme.colors.accentDeal,
@@ -533,17 +571,18 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.accentDeal,
     padding: 12,
     borderRadius: theme.radii.md,
-    marginBottom: 16,
-    ...theme.shadows.glowDeal,
+    borderCurve: 'continuous',
+    marginBottom: 14,
   },
   feedbackText: {
     color: '#FFFFFF',
-    fontSize: theme.typography.sizes.sm,
-    fontWeight: '700',
+    fontSize: theme.typography.sizes.xs,
+    fontWeight: '600',
   },
   card: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radii.lg,
+    borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: theme.colors.borderSubtle,
     padding: 16,
@@ -554,12 +593,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.borderSubtle,
+    gap: 8,
   },
   cardTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
   },
   cardTitle: {
     color: theme.colors.textPrimary,
@@ -572,25 +616,29 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 6,
+    gap: 8,
   },
   portalLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
     backgroundColor: theme.colors.primaryGlow,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: theme.radii.xs,
+    borderCurve: 'continuous',
+    flexShrink: 0,
   },
   portalLinkText: {
     color: theme.colors.primaryLight,
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   inputGroup: {
     marginBottom: 14,
   },
   label: {
+    flex: 1,
     color: theme.colors.textSecondary,
     fontSize: theme.typography.sizes.xs,
     fontWeight: '600',
@@ -601,6 +649,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: theme.colors.background,
     borderRadius: theme.radii.md,
+    borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: theme.colors.surfaceBorder,
     paddingHorizontal: 12,
@@ -611,24 +660,26 @@ const styles = StyleSheet.create({
   inputWithIcon: {
     flex: 1,
     color: theme.colors.textPrimary,
-    paddingVertical: 10,
     fontSize: theme.typography.sizes.xs,
+    paddingVertical: 10,
   },
   helperText: {
     color: theme.colors.textMuted,
     fontSize: 11,
-    marginTop: 5,
+    marginTop: 4,
     lineHeight: 15,
   },
   testBtn: {
-    backgroundColor: '#1E293B',
     borderWidth: 1,
     borderColor: theme.colors.borderSubtle,
-    paddingVertical: 10,
     borderRadius: theme.radii.md,
+    borderCurve: 'continuous',
+    paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
+    backgroundColor: theme.colors.surfaceElevated,
+    marginTop: 2,
+    marginBottom: 10,
   },
   testBtnInner: {
     flexDirection: 'row',
@@ -638,7 +689,7 @@ const styles = StyleSheet.create({
   testBtnText: {
     color: theme.colors.textPrimary,
     fontSize: theme.typography.sizes.xs,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   testResultBox: {
     flexDirection: 'row',
@@ -646,22 +697,48 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 10,
     borderRadius: theme.radii.sm,
-    marginTop: 10,
-    borderWidth: 1,
+    borderCurve: 'continuous',
+    marginBottom: 10,
   },
   testResultSuccess: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    backgroundColor: theme.colors.accentDealGlow,
+    borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.3)',
   },
   testResultError: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
   },
   testResultText: {
     color: theme.colors.textPrimary,
     fontSize: 11,
-    flex: 1,
     lineHeight: 16,
+    flex: 1,
+  },
+  accordionToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.radii.sm,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    marginTop: 6,
+  },
+  accordionToggleText: {
+    color: theme.colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  legacyBox: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.borderSubtle,
   },
   saveButton: {
     flexDirection: 'row',
@@ -670,13 +747,14 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: theme.colors.primary,
     borderRadius: theme.radii.md,
+    borderCurve: 'continuous',
     paddingVertical: 14,
-    marginTop: 6,
+    marginTop: 8,
     ...theme.shadows.glowPrimary,
   },
   saveButtonText: {
     color: '#FFFFFF',
-    fontSize: theme.typography.sizes.base,
+    fontSize: theme.typography.sizes.sm,
     fontWeight: '700',
   },
 });
