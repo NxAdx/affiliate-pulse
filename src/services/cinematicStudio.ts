@@ -91,6 +91,21 @@ function pickRandom<T>(items: T[]): T {
 
 export class CinematicStudioService {
   /**
+   * Generates the ChatGPT 2-Image Reference Prompt matching the user's proven workflow:
+   * "Use first image as reference and generate same style, cinematography for 2nd image..."
+   */
+  static buildReferencePrompt(
+    productTitle: string,
+    presetKey: CinematicPresetKey = 'dark_luxury_watch'
+  ): string {
+    const preset = CINEMATIC_PRESETS[presetKey];
+    return `Use first image as reference and generate same style, cinematography for 2nd image. Addjust the lighting, background, camera angel and all the aspect according so the image looks picture perfect and attractive, maintain the original aspect of product(dont modify product)(which we are regenerating 2nd image) & provide the most cinematic image.
+
+Target Aesthetic: ${preset.label} (${preset.description})
+Product: ${productTitle}`;
+  }
+
+  /**
    * Generates a completely unique, non-repetitive cinematic prompt every single time!
    * Combines dynamic angles, surfaces, lighting, and props so no two pins look identical.
    */
@@ -207,7 +222,7 @@ Crucial Quality Rules:
   }
 
   /**
-   * Attempts AI image generation via Google Imagen 3 API using geminiApiKey
+   * Attempts AI image generation via Gemini multimodal image generation API (gemini-3.1-flash-image)
    */
   static async generateImagenShot(
     prompt: string,
@@ -217,8 +232,11 @@ Crucial Quality Rules:
       return { success: false, error: 'Missing Gemini API Key. Configure it in Settings.' };
     }
 
+    const key = apiKey.trim();
+
+    // 1. Try Imagen 3 Predict endpoint first (works on projects with Imagen enabled)
     try {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey.trim()}`;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${key}`;
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -232,20 +250,68 @@ Crucial Quality Rules:
         }),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        return { success: false, error: `Imagen API returned status ${response.status}: ${errorText.substring(0, 100)}` };
+      if (response.ok) {
+        const data = await response.json();
+        const b64 = data?.predictions?.[0]?.bytesBase64Encoded;
+        if (b64) {
+          return { success: true, imageBase64: `data:image/jpeg;base64,${b64}` };
+        }
       }
-
-      const data = await response.json();
-      const b64 = data?.predictions?.[0]?.bytesBase64Encoded;
-      if (b64) {
-        return { success: true, imageBase64: `data:image/jpeg;base64,${b64}` };
-      }
-
-      return { success: false, error: 'No image returned in response.' };
-    } catch (err: any) {
-      return { success: false, error: err?.message || 'Failed to call Imagen 3 API' };
+    } catch {
+      // Fall through to multimodal models
     }
+
+    // 2. Candidate multimodal models supporting image output
+    const candidateModels = [
+      'gemini-2.5-flash-image',
+      'gemini-3.1-flash-image',
+      'gemini-2.0-flash-exp',
+    ];
+
+    for (const model of candidateModels) {
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: prompt }],
+              },
+            ],
+            generationConfig: {
+              responseModalities: ['TEXT', 'IMAGE'],
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          continue;
+        }
+
+        const data = await response.json();
+        const parts = data?.candidates?.[0]?.content?.parts || [];
+
+        for (const part of parts) {
+          if (part.inlineData?.data) {
+            const mime = part.inlineData.mimeType || 'image/png';
+            return {
+              success: true,
+              imageBase64: `data:${mime};base64,${part.inlineData.data}`,
+            };
+          }
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return {
+      success: false,
+      error:
+        'Google Imagen/Image generation is not enabled on this Gemini API key tier. Use 1-Tap "Copy ChatGPT Prompt" to generate with ChatGPT / Midjourney in seconds!',
+    };
   }
 }

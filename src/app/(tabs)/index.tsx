@@ -326,7 +326,42 @@ export default function GeneratorScreen() {
     const title = customTitle || activeProduct?.title || 'Luxury Product';
     const { prompt, sceneDescription } = CinematicStudioService.buildCinematicPrompt(title, selectedPresetKey);
     setImagenStatus(`Scene: ${sceneDescription}`);
-    handleCopyText(prompt, 'cinematicPrompt', `Prompt copied! (${sceneDescription})`);
+    handleCopyText(prompt, 'cinematicPrompt', `Dynamic prompt copied! (${sceneDescription})`);
+  };
+
+  const handleCopyReferencePrompt = () => {
+    const title = customTitle || activeProduct?.title || 'Luxury Watch';
+    const prompt = CinematicStudioService.buildReferencePrompt(title, selectedPresetKey);
+    setImagenStatus('ChatGPT 2-Image prompt copied!');
+    handleCopyText(prompt, 'refPrompt', 'ChatGPT 2-Image prompt copied!');
+  };
+
+  const handleCopyProductImageUrl = () => {
+    const img = customImageUrl || activeProduct?.imageUrl;
+    if (img) {
+      handleCopyText(img, 'productImageUrl', 'Product image URL copied to clipboard!');
+    } else {
+      Alert.alert('No Image Available', 'No product image URL found.');
+    }
+  };
+
+  const handlePasteImageUrlFromClipboard = async () => {
+    try {
+      const text = await Clipboard.getStringAsync();
+      const clean = (text || '').trim();
+      if (clean && (clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('data:image'))) {
+        setCustomImageUrl(clean);
+        setImagenStatus('Applied image from clipboard!');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert(
+          'Clipboard Empty or Invalid',
+          'Please copy a valid image URL (e.g. from ChatGPT, Discord, or web) to your clipboard before tapping this button.'
+        );
+      }
+    } catch (err: any) {
+      Alert.alert('Clipboard Error', err?.message || 'Could not read clipboard');
+    }
   };
 
   const handleGenerateImagen = async () => {
@@ -1075,23 +1110,70 @@ export default function GeneratorScreen() {
                 <Text style={styles.actionBtnText}>Create Clickable Pin on Pinterest (1-Tap)</Text>
               </TouchableOpacity>
 
-              {/* AI Cinematic Helpers: Copy ChatGPT Prompt & Generate Imagen */}
+              {/* Workflow Suite A: ChatGPT Reference Workflow */}
               <View style={[styles.dualActionRow, { marginTop: 8 }]}>
+                <TouchableOpacity
+                  style={[styles.secondaryActionBtn, { flex: 1, backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}
+                  onPress={handleCopyReferencePrompt}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={copiedKey === 'refPrompt' ? 'checkmark' : 'sparkles'}
+                    size={14}
+                    color={theme.colors.primaryLight}
+                  />
+                  <Text style={[styles.secondaryActionBtnText, { color: theme.colors.primaryLight, fontWeight: '700' }]}>
+                    {copiedKey === 'refPrompt' ? 'Prompt Copied!' : 'Copy ChatGPT Prompt'}
+                  </Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   style={[styles.secondaryActionBtn, { flex: 1 }]}
                   onPress={handleCopyCinematicPrompt}
                   activeOpacity={0.7}
                 >
                   <Ionicons
-                    name={copiedKey === 'cinematicPrompt' ? 'checkmark' : 'sparkles-outline'}
+                    name={copiedKey === 'cinematicPrompt' ? 'checkmark' : 'shuffle-outline'}
                     size={14}
                     color={theme.colors.secondaryLight}
                   />
                   <Text style={styles.secondaryActionBtnText}>
-                    {copiedKey === 'cinematicPrompt' ? 'Prompt Copied!' : 'Copy AI Prompt (ChatGPT)'}
+                    {copiedKey === 'cinematicPrompt' ? 'Copied!' : 'Randomize Prompt'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Workflow Suite B: Image Management & Clipboard Sync */}
+              <View style={[styles.dualActionRow, { marginTop: 6 }]}>
+                <TouchableOpacity
+                  style={[styles.secondaryActionBtn, { flex: 1 }]}
+                  onPress={handleCopyProductImageUrl}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={copiedKey === 'productImageUrl' ? 'checkmark' : 'link-outline'}
+                    size={14}
+                    color={theme.colors.primaryLight}
+                  />
+                  <Text style={styles.secondaryActionBtnText}>
+                    {copiedKey === 'productImageUrl' ? 'Image Copied!' : 'Copy Product Image'}
                   </Text>
                 </TouchableOpacity>
 
+                <TouchableOpacity
+                  style={[styles.secondaryActionBtn, { flex: 1, borderColor: theme.colors.pinterest, borderWidth: 1 }]}
+                  onPress={handlePasteImageUrlFromClipboard}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="clipboard-outline" size={14} color={theme.colors.pinterest} />
+                  <Text style={[styles.secondaryActionBtnText, { color: theme.colors.pinterest, fontWeight: '600' }]}>
+                    Paste Image URL
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Workflow Suite C: AI Generation Attempt & Board */}
+              <View style={[styles.dualActionRow, { marginTop: 6 }]}>
                 <TouchableOpacity
                   style={[styles.secondaryActionBtn, { flex: 1 }]}
                   onPress={handleGenerateImagen}
@@ -1107,6 +1189,15 @@ export default function GeneratorScreen() {
                     {isGeneratingImagen ? 'Generating...' : 'Generate Imagen Shot'}
                   </Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.secondaryActionBtn, { flex: 1 }]}
+                  onPress={handleExportPin}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="camera-outline" size={14} color={theme.colors.primaryLight} />
+                  <Text style={styles.secondaryActionBtnText}>Export 2:3 Graphic</Text>
+                </TouchableOpacity>
               </View>
 
               {imagenStatus && (
@@ -1115,26 +1206,17 @@ export default function GeneratorScreen() {
                 </View>
               )}
 
-              {/* Secondary Actions: Export 2:3 Graphic Pin & Open Target Board */}
-              <View style={[styles.dualActionRow, { marginTop: 8 }]}>
-                <TouchableOpacity
-                  style={[styles.secondaryActionBtn, { flex: 1 }]}
-                  onPress={handleExportPin}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="camera-outline" size={14} color={theme.colors.primaryLight} />
-                  <Text style={styles.secondaryActionBtnText}>Export Graphic Pin</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.secondaryActionBtn, { flex: 1 }]}
-                  onPress={() => CinematicStudioService.openBoard(settings.pinterestBoardId)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="open-outline" size={14} color={theme.colors.pinterest} />
-                  <Text style={styles.secondaryActionBtnText}>Open Board (fαѕнισи) ↗</Text>
-                </TouchableOpacity>
-              </View>
+              {/* Direct Link to User's Watch Board */}
+              <TouchableOpacity
+                style={[styles.secondaryActionBtn, { marginTop: 6, justifyContent: 'center' }]}
+                onPress={() => CinematicStudioService.openBoard(settings.pinterestBoardId)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="open-outline" size={14} color={theme.colors.pinterest} />
+                <Text style={[styles.secondaryActionBtnText, { color: theme.colors.pinterest }]}>
+                  Open Board: fαѕнισи (Watch Collection) ↗
+                </Text>
+              </TouchableOpacity>
 
               {activeContent.pinterestTags && (
                 <View style={styles.tagWrap}>
