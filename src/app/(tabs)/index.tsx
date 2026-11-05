@@ -324,8 +324,9 @@ export default function GeneratorScreen() {
 
   const handleCopyCinematicPrompt = () => {
     const title = customTitle || activeProduct?.title || 'Luxury Product';
-    const prompt = CinematicStudioService.buildCinematicPrompt(title, selectedPresetKey);
-    handleCopyText(prompt, 'cinematicPrompt', 'Cinematic AI prompt copied for ChatGPT / Midjourney!');
+    const { prompt, sceneDescription } = CinematicStudioService.buildCinematicPrompt(title, selectedPresetKey);
+    setImagenStatus(`Scene: ${sceneDescription}`);
+    handleCopyText(prompt, 'cinematicPrompt', `Prompt copied! (${sceneDescription})`);
   };
 
   const handleGenerateImagen = async () => {
@@ -334,17 +335,17 @@ export default function GeneratorScreen() {
       return;
     }
     setIsGeneratingImagen(true);
-    setImagenStatus('Generating studio shot via Imagen 3...');
+    const title = customTitle || activeProduct?.title || 'Luxury Watch';
+    const { prompt, sceneDescription } = CinematicStudioService.buildCinematicPrompt(title, selectedPresetKey);
+    setImagenStatus(`Generating: ${sceneDescription}...`);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      const title = customTitle || activeProduct?.title || 'Luxury Watch';
-      const prompt = CinematicStudioService.buildCinematicPrompt(title, selectedPresetKey);
       const res = await CinematicStudioService.generateImagenShot(prompt, settings.geminiApiKey);
 
       if (res.success && res.imageBase64) {
         setCustomImageUrl(res.imageBase64);
-        setImagenStatus('Cinematic AI Studio shot generated & applied!');
+        setImagenStatus(`Applied: ${sceneDescription}`);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         setImagenStatus(`AI Studio: ${res.error || 'Failed to generate'}`);
