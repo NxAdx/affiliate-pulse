@@ -27,6 +27,7 @@ import { PinCardView } from '../../components/PinCardView';
 import { DealHunterService } from '../../services/dealHunter';
 import { DealCategory } from '../../types';
 import BulkSyndicationView from '../../components/BulkSyndicationView';
+import { CinematicStudioService, CINEMATIC_PRESETS, CinematicPresetKey } from '../../services/cinematicStudio';
 
 export default function GeneratorScreen() {
   const [generatorMode, setGeneratorMode] = useState<'single' | 'bulk'>('single');
@@ -68,6 +69,10 @@ export default function GeneratorScreen() {
     bulkQueue,
   } = useAppStore();
 
+  // Cinematic Studio State
+  const [selectedPresetKey, setSelectedPresetKey] = useState<CinematicPresetKey>('dark_luxury_watch');
+  const [isGeneratingImagen, setIsGeneratingImagen] = useState(false);
+  const [imagenStatus, setImagenStatus] = useState<string | null>(null);
   const [isHunting, setIsHunting] = useState(false);
   const [isPublishingBlogger, setIsPublishingBlogger] = useState(false);
   const [bloggerPublishSuccessUrl, setBloggerPublishSuccessUrl] = useState<string | null>(null);
@@ -299,6 +304,59 @@ export default function GeneratorScreen() {
   /**
    * Pinterest 2:3 Pin Graphic Export (1000x1500) via react-native-view-shot
    */
+  const handleCreateClickablePin = async () => {
+    if (!activeProduct?.affiliateUrl) {
+      Alert.alert('Missing Link', 'Affiliate link is required to create a clickable pin.');
+      return;
+    }
+    const media = customImageUrl || activeProduct?.imageUrl || '';
+    const title = customTitle || activeContent?.pinterestTitle || activeProduct?.title || 'Trending Deal';
+    const desc = activeContent?.pinterestDescription || '';
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await CinematicStudioService.openPinterestPinBuilder(
+      activeProduct.affiliateUrl,
+      media,
+      title,
+      desc
+    );
+  };
+
+  const handleCopyCinematicPrompt = () => {
+    const title = customTitle || activeProduct?.title || 'Luxury Product';
+    const prompt = CinematicStudioService.buildCinematicPrompt(title, selectedPresetKey);
+    handleCopyText(prompt, 'cinematicPrompt', 'Cinematic AI prompt copied for ChatGPT / Midjourney!');
+  };
+
+  const handleGenerateImagen = async () => {
+    if (!settings.geminiApiKey) {
+      Alert.alert('Gemini API Key Required', 'Please configure your Gemini API Key in Settings to generate AI studio shots.');
+      return;
+    }
+    setIsGeneratingImagen(true);
+    setImagenStatus('Generating studio shot via Imagen 3...');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    try {
+      const title = customTitle || activeProduct?.title || 'Luxury Watch';
+      const prompt = CinematicStudioService.buildCinematicPrompt(title, selectedPresetKey);
+      const res = await CinematicStudioService.generateImagenShot(prompt, settings.geminiApiKey);
+
+      if (res.success && res.imageBase64) {
+        setCustomImageUrl(res.imageBase64);
+        setImagenStatus('Cinematic AI Studio shot generated & applied!');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        setImagenStatus(`AI Studio: ${res.error || 'Failed to generate'}`);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
+    } catch (err: any) {
+      setImagenStatus(`Error: ${err?.message || 'Failed'}`);
+    } finally {
+      setIsGeneratingImagen(false);
+    }
+  };
+
   const handleExportPin = async () => {
     if (!pinCardRef.current) {
       setStatusMessage('Pin card view not ready for export');
@@ -950,17 +1008,45 @@ export default function GeneratorScreen() {
             </View>
           )}
 
-          {/* Destination 3: Pinterest 2:3 Pin Studio (Universal for all products!) */}
+          {/* Destination 3: Pinterest 2:3 Pin Studio & AI Cinematic Studio */}
           {(activeChannelTab === 'all' || activeChannelTab === 'pinterest') && (
             <View style={styles.channelCard}>
               <View style={styles.channelCardHeader}>
                 <View style={styles.channelTitleRow}>
                   <Ionicons name="logo-pinterest" size={18} color={theme.colors.pinterest} />
-                  <Text style={styles.channelTitle}>Pinterest 2:3 Pin Studio</Text>
+                  <Text style={styles.channelTitle}>Pinterest Cinematic Studio</Text>
                 </View>
                 <View style={[styles.badgePill, { backgroundColor: 'rgba(230, 0, 35, 0.15)', borderColor: theme.colors.pinterest }]}>
-                  <Text style={[styles.badgePillText, { color: theme.colors.pinterest }]}>1000x1500 HD</Text>
+                  <Text style={[styles.badgePillText, { color: theme.colors.pinterest }]}>CLICKABLE PIN</Text>
                 </View>
+              </View>
+
+              {/* Cinematic Aesthetic Preset Chips */}
+              <View style={{ marginBottom: 10 }}>
+                <Text style={[styles.tuneLabel, { marginBottom: 6 }]}>Cinematic Style Direction:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {Object.values(CINEMATIC_PRESETS).map((p) => {
+                    const isActive = selectedPresetKey === p.key;
+                    return (
+                      <TouchableOpacity
+                        key={p.key}
+                        style={[
+                          styles.presetChip,
+                          isActive && styles.presetChipActive,
+                        ]}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setSelectedPresetKey(p.key);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.presetChipText, isActive && styles.presetChipTextActive]}>
+                          {p.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </View>
 
               {/* Pin Graphic Preview */}
@@ -978,66 +1064,76 @@ export default function GeneratorScreen() {
                 />
               </View>
 
-              {/* Pin Actions */}
+              {/* Primary Action 1: Create Clickable Pin Directly on Pinterest */}
               <TouchableOpacity
                 style={[styles.actionBtn, { backgroundColor: theme.colors.pinterest }]}
-                onPress={handleExportPin}
+                onPress={handleCreateClickablePin}
                 activeOpacity={0.85}
-                disabled={isProcessing}
               >
-                <Ionicons name="camera-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.actionBtnText}>Export & Share 2:3 Graphic Pin</Text>
+                <Ionicons name="logo-pinterest" size={18} color="#FFFFFF" />
+                <Text style={styles.actionBtnText}>Create Clickable Pin on Pinterest (1-Tap)</Text>
               </TouchableOpacity>
 
+              {/* AI Cinematic Helpers: Copy ChatGPT Prompt & Generate Imagen */}
               <View style={[styles.dualActionRow, { marginTop: 8 }]}>
                 <TouchableOpacity
                   style={[styles.secondaryActionBtn, { flex: 1 }]}
-                  onPress={() =>
-                    handleCopyText(
-                      activeProduct?.affiliateUrl || '',
-                      'pinLink',
-                      'Affiliate Pin link copied!'
-                    )
-                  }
+                  onPress={handleCopyCinematicPrompt}
                   activeOpacity={0.7}
                 >
                   <Ionicons
-                    name={copiedKey === 'pinLink' ? 'checkmark' : 'link-outline'}
-                    size={15}
-                    color={theme.colors.primaryLight}
+                    name={copiedKey === 'cinematicPrompt' ? 'checkmark' : 'sparkles-outline'}
+                    size={14}
+                    color={theme.colors.secondaryLight}
                   />
                   <Text style={styles.secondaryActionBtnText}>
-                    {copiedKey === 'pinLink' ? 'Copied Link' : 'Copy Pin Link'}
+                    {copiedKey === 'cinematicPrompt' ? 'Prompt Copied!' : 'Copy AI Prompt (ChatGPT)'}
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.secondaryActionBtn, { flex: 1 }]}
-                  onPress={() => {
-                    const desc = `${activeContent.pinterestTitle}\n\n${activeContent.pinterestDescription || ''}\n\n${activeContent.pinterestTags?.join(' ') || ''}`;
-                    handleCopyText(desc, 'pinDesc', 'Pin title, description & tags copied!');
-                  }}
+                  onPress={handleGenerateImagen}
+                  disabled={isGeneratingImagen}
                   activeOpacity={0.7}
                 >
-                  <Ionicons
-                    name={copiedKey === 'pinDesc' ? 'checkmark' : 'copy-outline'}
-                    size={15}
-                    color={theme.colors.secondaryLight}
-                  />
+                  {isGeneratingImagen ? (
+                    <ActivityIndicator size="small" color={theme.colors.primaryLight} />
+                  ) : (
+                    <Ionicons name="color-wand-outline" size={14} color={theme.colors.primaryLight} />
+                  )}
                   <Text style={styles.secondaryActionBtnText}>
-                    {copiedKey === 'pinDesc' ? 'Copied SEO' : 'Copy Pin Copy & SEO'}
+                    {isGeneratingImagen ? 'Generating...' : 'Generate Imagen Shot'}
                   </Text>
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
-                style={[styles.secondaryActionBtn, { width: '100%', marginTop: 8 }]}
-                onPress={handleOpenPinterest}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="logo-pinterest" size={16} color={theme.colors.pinterest} />
-                <Text style={styles.secondaryActionBtnText}>Open Pinterest App / Web</Text>
-              </TouchableOpacity>
+              {imagenStatus && (
+                <View style={[styles.presetChip, { marginTop: 6, alignSelf: 'center', backgroundColor: theme.colors.surfaceElevated }]}>
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: 10 }}>{imagenStatus}</Text>
+                </View>
+              )}
+
+              {/* Secondary Actions: Export 2:3 Graphic Pin & Open Target Board */}
+              <View style={[styles.dualActionRow, { marginTop: 8 }]}>
+                <TouchableOpacity
+                  style={[styles.secondaryActionBtn, { flex: 1 }]}
+                  onPress={handleExportPin}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="camera-outline" size={14} color={theme.colors.primaryLight} />
+                  <Text style={styles.secondaryActionBtnText}>Export Graphic Pin</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.secondaryActionBtn, { flex: 1 }]}
+                  onPress={() => CinematicStudioService.openBoard(settings.pinterestBoardId)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="open-outline" size={14} color={theme.colors.pinterest} />
+                  <Text style={styles.secondaryActionBtnText}>Open Board (fαѕнισи) ↗</Text>
+                </TouchableOpacity>
+              </View>
 
               {activeContent.pinterestTags && (
                 <View style={styles.tagWrap}>
@@ -1187,6 +1283,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  presetChip: {
+    backgroundColor: theme.colors.background,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: theme.radii.xs,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    marginRight: 6,
+  },
+  presetChipActive: {
+    backgroundColor: theme.colors.surfaceElevated,
+    borderColor: theme.colors.secondary,
+  },
+  presetChipText: {
+    color: theme.colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  presetChipTextActive: {
+    color: theme.colors.secondaryLight,
+    fontWeight: '700',
   },
   modeToggleRow: {
     flexDirection: 'row',

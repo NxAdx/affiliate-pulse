@@ -53,6 +53,7 @@ export default function SettingsScreen() {
 
   const [telegramToken, setTelegramToken] = useState(settings.telegramBotToken);
   const [telegramChannel, setTelegramChannel] = useState(settings.telegramChannelId);
+  const [pinterestBoard, setPinterestBoard] = useState(settings.pinterestBoardId || 'https://in.pinterest.com/aadarshlokhande/f%ce%b1%d1%95%d0%bd%ce%b9%cf%83%d0%b8/');
 
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [isTestingBlogger, setIsTestingBlogger] = useState(false);
@@ -77,6 +78,7 @@ export default function SettingsScreen() {
     setBloggerWebhookUrl(settings.bloggerWebhookUrl?.trim() || DEFAULT_BLOGGER_WEBHOOK);
     setTelegramToken(settings.telegramBotToken);
     setTelegramChannel(settings.telegramChannelId);
+    setPinterestBoard(settings.pinterestBoardId || 'https://in.pinterest.com/aadarshlokhande/f%ce%b1%d1%95%d0%bd%ce%b9%cf%83%d0%b8/');
   }, [settings]);
 
   const handleSave = () => {
@@ -90,6 +92,7 @@ export default function SettingsScreen() {
       bloggerWebhookUrl: bloggerWebhookUrl.trim() || DEFAULT_BLOGGER_WEBHOOK,
       telegramBotToken: telegramToken.trim(),
       telegramChannelId: telegramChannel.trim(),
+      pinterestBoardId: pinterestBoard.trim(),
     });
     setSavedFeedback(true);
     setTimeout(() => setSavedFeedback(false), 3500);
@@ -425,6 +428,38 @@ export default function SettingsScreen() {
             <Text style={styles.testResultText}>{telegramTestResult.message}</Text>
           </View>
         )}
+      </View>
+
+      {/* SECTION 5: Pinterest Board (Visual Search) */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.cardTitleRow}>
+            <Ionicons name="logo-pinterest" size={16} color={theme.colors.pinterest} />
+            <Text style={styles.cardTitle}>Pinterest Board (Visual Search)</Text>
+          </View>
+          <PortalLink label="Board ↗" url={pinterestBoard || 'https://pinterest.com'} />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <View style={styles.labelRow}>
+            <Text style={styles.label} numberOfLines={1}>Default Fashion / Watch Board</Text>
+          </View>
+          <View style={styles.inputWrapper}>
+            <Ionicons name="link-outline" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
+            <TextInput
+              style={styles.inputWithIcon}
+              placeholder="https://in.pinterest.com/username/board/"
+              placeholderTextColor={theme.colors.textMuted}
+              value={pinterestBoard}
+              onChangeText={setPinterestBoard}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+          <Text style={styles.helperText}>
+            Pins created in the 2:3 Pin Studio will link directly to this board.
+          </Text>
+        </View>
       </View>
 
       {/* SAVE BUTTON */}

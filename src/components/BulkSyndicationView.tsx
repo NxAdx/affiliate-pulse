@@ -18,6 +18,7 @@ import { theme } from '../theme';
 import { useAppStore } from '../store/useAppStore';
 import { BulkQueueItem, BulkExecutionProgress, DealCategory } from '../types';
 import { BulkSyndicationService } from '../services/bulkSyndication';
+import { CinematicStudioService } from '../services/cinematicStudio';
 
 const CATEGORY_CHIPS: { key: DealCategory; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'all', label: 'Universal', icon: 'sparkles-outline' },
@@ -452,6 +453,23 @@ export default function BulkSyndicationView() {
                     )}
                   </View>
                 </View>
+
+                {/* 1-Tap Pinterest Pin */}
+                <TouchableOpacity
+                  style={styles.pinQuickBtn}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    CinematicStudioService.openPinterestPinBuilder(
+                      item.url,
+                      item.imageUrl,
+                      item.title,
+                      `Flash Deal: ${item.price} (${item.discount}) on Amazon!`
+                    );
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="logo-pinterest" size={15} color={theme.colors.pinterest} />
+                </TouchableOpacity>
 
                 {/* Delete Item */}
                 <TouchableOpacity
@@ -1009,6 +1027,10 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '500',
   },
+  pinQuickBtn: {
+    padding: 6,
+    marginRight: -4,
+  },
   deleteBtn: {
     padding: 6,
   },
@@ -1174,3 +1196,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+

@@ -80,7 +80,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   bloggerEmail: '',
   telegramBotToken: '',
   telegramChannelId: '',
-  pinterestBoardId: '',
+  pinterestBoardId: 'https://in.pinterest.com/aadarshlokhande/f%ce%b1%d1%95%d0%bd%ce%b9%cf%83%d0%b8/',
 };
 
 export const useAppStore = create<AppState>()(
