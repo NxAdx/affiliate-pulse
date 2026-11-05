@@ -29,6 +29,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG || 'dealhunter-21' }}
+          BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID || '4105733030604942075' }}
+          BLOGGER_WEBHOOK_URL: ${{ secrets.BLOGGER_WEBHOOK_URL || 'https://script.google.com/macros/s/AKfycbxh1BaXpDleljcWtTW_WSTtO-ks7UfQYQ78TkLVnYbpdgW15EiB5RycAIhgruAiRZPQ/exec' }}
           MIN_FASHION_DISCOUNT: '50'
           MIN_TECH_DISCOUNT: '40'
           DEALS_PER_RUN: '3'

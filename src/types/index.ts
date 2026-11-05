@@ -82,3 +82,33 @@ export interface AppSettings {
   telegramChannelId: string;
   pinterestBoardId: string;
 }
+
+export type BulkItemStatus = 'idle' | 'scraping' | 'generating' | 'publishing' | 'done' | 'failed';
+
+export interface BulkQueueItem {
+  id: string;
+  url: string;
+  asin?: string;
+  title: string;
+  imageUrl: string;
+  price: string;
+  mrp?: string;
+  discount: string;
+  category: DealCategory;
+  platform: 'amazon' | 'flipkart' | 'myntra' | 'other';
+  selected: boolean;
+  status: BulkItemStatus;
+  errorMessage?: string;
+  bloggerUrl?: string;
+  telegramMessageId?: number;
+}
+
+export interface BulkExecutionProgress {
+  total: number;
+  completed: number;
+  successful: number;
+  failed: number;
+  currentIndex: number;
+  currentTitle?: string;
+  phase: 'idle' | 'running' | 'paused' | 'finished';
+}

@@ -26,8 +26,10 @@ import { TelegramService } from '../../services/telegramBot';
 import { PinCardView } from '../../components/PinCardView';
 import { DealHunterService } from '../../services/dealHunter';
 import { DealCategory } from '../../types';
+import BulkSyndicationView from '../../components/BulkSyndicationView';
 
 export default function GeneratorScreen() {
+  const [generatorMode, setGeneratorMode] = useState<'single' | 'bulk'>('single');
   const [inputUrl, setInputUrl] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -63,6 +65,7 @@ export default function GeneratorScreen() {
     settings,
     addDealToHistory,
     dealsHistory,
+    bulkQueue,
   } = useAppStore();
 
   const [isHunting, setIsHunting] = useState(false);
@@ -451,8 +454,64 @@ export default function GeneratorScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      
+      {/* Top High-Velocity Mode Switcher */}
+      <View style={styles.modeToggleRow}>
+        <TouchableOpacity
+          style={[styles.modeToggleBtn, generatorMode === 'single' && styles.modeToggleBtnActive]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setGeneratorMode('single');
+          }}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="flash-outline"
+            size={14}
+            color={generatorMode === 'single' ? '#FFFFFF' : theme.colors.textMuted}
+          />
+          <Text
+            style={[
+              styles.modeToggleText,
+              generatorMode === 'single' && styles.modeToggleTextActive,
+            ]}
+          >
+            Single Deal
+          </Text>
+        </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.modeToggleBtn, generatorMode === 'bulk' && styles.modeToggleBtnActive]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setGeneratorMode('bulk');
+          }}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="layers-outline"
+            size={14}
+            color={generatorMode === 'bulk' ? '#FFFFFF' : theme.colors.textMuted}
+          />
+          <Text
+            style={[
+              styles.modeToggleText,
+              generatorMode === 'bulk' && styles.modeToggleTextActive,
+            ]}
+          >
+            Bulk Auto-Syndicator
+          </Text>
+          {bulkQueue.length > 0 && (
+            <View style={styles.modeQueueBadge}>
+              <Text style={styles.modeQueueBadgeText}>{bulkQueue.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {generatorMode === 'bulk' ? (
+        <BulkSyndicationView />
+      ) : (
+        <>
       {/* Universal Flexible Deal Hunter Card */}
       <View style={styles.autoHunterCard}>
         <View style={styles.autoHunterHeader}>
@@ -1118,6 +1177,8 @@ export default function GeneratorScreen() {
           )}
         </View>
       )}
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -1126,6 +1187,52 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  modeToggleRow: {
+    flexDirection: 'row',
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.lg,
+    borderCurve: 'continuous',
+    padding: 3,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    gap: 4,
+  },
+  modeToggleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: theme.radii.md,
+    borderCurve: 'continuous',
+  },
+  modeToggleBtnActive: {
+    backgroundColor: theme.colors.primary,
+  },
+  modeToggleText: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modeToggleTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  modeQueueBadge: {
+    backgroundColor: theme.colors.accentDeal,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderCurve: 'continuous',
+  },
+  modeQueueBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
   content: {
     padding: theme.spacing.md,

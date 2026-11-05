@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import { MMKV } from 'react-native-mmkv';
-import { AppSettings, DealCategory, DealRecord, ProductMetadata, GeneratedContent } from '../types';
+import { AppSettings, DealCategory, DealRecord, ProductMetadata, GeneratedContent, BulkQueueItem } from '../types';
 import { DEFAULT_BLOGGER_WEBHOOK } from '../services/bloggerApi';
 
 let mmkvInstance: MMKV | null = null;
@@ -57,6 +57,13 @@ interface AppState {
   removeDealFromHistory: (id: string) => void;
   clearHistory: () => void;
   
+  // Bulk Syndication Queue
+  bulkQueue: BulkQueueItem[];
+  setBulkQueue: (queue: BulkQueueItem[]) => void;
+  updateBulkQueueItem: (id: string, partial: Partial<BulkQueueItem>) => void;
+  removeBulkQueueItem: (id: string) => void;
+  clearBulkQueue: () => void;
+
   // App Settings & Credentials
   settings: AppSettings;
   updateSettings: (partial: Partial<AppSettings>) => void;
@@ -100,6 +107,20 @@ export const useAppStore = create<AppState>()(
         })),
       clearHistory: () => set({ dealsHistory: [] }),
 
+      bulkQueue: [],
+      setBulkQueue: (queue) => set({ bulkQueue: queue }),
+      updateBulkQueueItem: (id, partial) =>
+        set((state) => ({
+          bulkQueue: state.bulkQueue.map((item) =>
+            item.id === id ? { ...item, ...partial } : item
+          ),
+        })),
+      removeBulkQueueItem: (id) =>
+        set((state) => ({
+          bulkQueue: state.bulkQueue.filter((item) => item.id !== id),
+        })),
+      clearBulkQueue: () => set({ bulkQueue: [] }),
+
       settings: DEFAULT_SETTINGS,
       updateSettings: (partial) =>
         set((state) => ({
@@ -113,6 +134,7 @@ export const useAppStore = create<AppState>()(
         settings: state.settings,
         dealsHistory: state.dealsHistory,
         selectedCategory: state.selectedCategory,
+        bulkQueue: state.bulkQueue,
       }),
     }
   )
