@@ -24,6 +24,7 @@ ios/
 *.log
 *.tmp
 scratch/
+SS folder/
 
 .codex/
 .github/skills/

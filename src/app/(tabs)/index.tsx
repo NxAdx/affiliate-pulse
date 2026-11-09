@@ -30,6 +30,7 @@ import { PinterestStudioCard } from '../../components/PinterestStudioCard';
 import { BloggerStudioCard } from '../../components/BloggerStudioCard';
 import { BroadcastStudioCard } from '../../components/BroadcastStudioCard';
 import { CinematicPresetKey } from '../../services/cinematicStudio';
+import { useShareIntent } from 'expo-share-intent';
 
 type ChannelTab = 'pinterest' | 'blogger' | 'telegram' | 'whatsapp' | 'x';
 
@@ -122,11 +123,15 @@ export default function GeneratorScreen() {
     setPinterestStatusMsg('');
   };
 
-  // --- Handlers ---
+  // Native Android Intent.ACTION_SEND & Deep-Link Ingestion
+  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent({
+    resetOnBackground: true,
+  });
 
-  const handleGenerate = async () => {
-    if (!inputUrl.trim()) {
-      setStatusMessage('Please paste an Amazon, Flipkart or Myntra link');
+  const handleGenerateWithUrl = async (targetUrl: string) => {
+    const cleanUrl = ProductScraper.extractUrlFromText(targetUrl);
+    if (!cleanUrl) {
+      setStatusMessage('Please paste a valid Amazon, Flipkart or Myntra link');
       return;
     }
 
@@ -135,7 +140,7 @@ export default function GeneratorScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      const product = await ProductScraper.parseProductUrl(inputUrl.trim(), {
+      const product = await ProductScraper.parseProductUrl(cleanUrl, {
         amazon: settings.amazonAffiliateTag,
         flipkart: settings.flipkartAffiliateTag,
         earnkaro: settings.earnkaroToken,
@@ -173,6 +178,47 @@ export default function GeneratorScreen() {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // 1. Intercept Android Intent.ACTION_SEND (when user clicks "Share -> Affiliate Pulse" in Amazon/Flipkart)
+  useEffect(() => {
+    if (hasShareIntent && (shareIntent.text || shareIntent.webUrl)) {
+      const sharedRaw = (shareIntent.text || shareIntent.webUrl || '').trim();
+      const extracted = ProductScraper.extractUrlFromText(sharedRaw);
+      if (extracted) {
+        setInputUrl(extracted);
+        resetShareIntent();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setStatusMessage('Shared deal received! Processing automatically...');
+        handleGenerateWithUrl(extracted);
+      }
+    }
+  }, [hasShareIntent, shareIntent]);
+
+  // 2. Intercept deep links (e.g. affiliatepulse://...)
+  useEffect(() => {
+    const handleDeepLink = (event: { url: string }) => {
+      if (!event.url) return;
+      const extracted = ProductScraper.extractUrlFromText(event.url);
+      if (extracted) {
+        setInputUrl(extracted);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        handleGenerateWithUrl(extracted);
+      }
+    };
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink({ url });
+    });
+
+    const sub = Linking.addEventListener('url', handleDeepLink);
+    return () => sub.remove();
+  }, []);
+
+  // --- Handlers ---
+
+  const handleGenerate = async () => {
+    await handleGenerateWithUrl(inputUrl);
   };
 
   const handleAutoHunt = async (
@@ -531,6 +577,8 @@ export default function GeneratorScreen() {
                   }}
                   onExportGraphic={handleExportPin}
                   statusMessage={pinterestStatusMsg}
+                  seoDescription={activeContent?.pinterestDescription}
+                  tags={activeContent?.pinterestTags}
                 />
               )}
 

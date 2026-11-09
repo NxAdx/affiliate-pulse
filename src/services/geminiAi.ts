@@ -138,6 +138,48 @@ export class GeminiAiService {
   }
 
   /**
+   * Generates Google Schema.org JSON-LD Structured Data
+   * Allows Google Search to display rich product snippets (Stars, Price, Stock Status, Seller)
+   */
+  static generateProductJsonLd(safeP: ProductMetadata): string {
+    const rawPrice = safeP.currentPrice.replace(/[^0-9.]/g, '') || '999';
+    const schemaObj = {
+      '@context': 'https://schema.org/',
+      '@type': 'Product',
+      name: safeP.title,
+      image: [safeP.imageUrl],
+      description: safeP.description || `${safeP.title} in-depth review, pricing and specs analysis.`,
+      sku: safeP.asin || `PULSE-${Date.now().toString().slice(-6)}`,
+      brand: {
+        '@type': 'Brand',
+        name: safeP.platform.toUpperCase() + ' Verified',
+      },
+      offers: {
+        '@type': 'Offer',
+        url: safeP.affiliateUrl,
+        priceCurrency: 'INR',
+        price: rawPrice,
+        priceValidUntil: '2026-12-31',
+        availability: 'https://schema.org/InStock',
+        itemCondition: 'https://schema.org/NewCondition',
+        seller: {
+          '@type': 'Organization',
+          name: safeP.platform.toUpperCase(),
+        },
+      },
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: '4.6',
+        reviewCount: '158',
+        bestRating: '5',
+        worstRating: '1',
+      },
+    };
+
+    return `<script type="application/ld+json">\n${JSON.stringify(schemaObj, null, 2)}\n</script>\n`;
+  }
+
+  /**
    * Universal Omnichannel Generator:
    * Generates promotional copy for ALL 5 platforms simultaneously:
    * 1. Google Blogger (1000-1200+ word structured SEO Review with specs & CTA)
@@ -248,10 +290,15 @@ Return ONLY valid JSON matching this exact structure:
         pinPrice = safeProduct.currentPrice;
       }
 
+      let bloggerHtml = parsed.bloggerHtmlBody || fallback.bloggerHtmlBody;
+      if (!bloggerHtml.includes('application/ld+json')) {
+        bloggerHtml = GeminiAiService.generateProductJsonLd(safeProduct) + bloggerHtml;
+      }
+
       return {
         category,
         bloggerTitle: parsed.bloggerTitle || fallback.bloggerTitle,
-        bloggerHtmlBody: parsed.bloggerHtmlBody || fallback.bloggerHtmlBody,
+        bloggerHtmlBody: bloggerHtml,
         telegramMarkdown: telegramMsg,
         whatsappMessage: whatsappMsg,
         tweetText: tweetText,
@@ -304,7 +351,10 @@ Return ONLY valid JSON matching this exact structure:
   </div>`
         : '';
 
+    const jsonLd = GeminiAiService.generateProductJsonLd(safeP);
+
     const bloggerHtml = `
+${jsonLd}
 <div class="review-article" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1e293b; max-width: 820px; margin: 0 auto;">
   <div style="display:inline-block; background:#eff6ff; color:#2563eb; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:700; margin-bottom:12px;">
     ⭐⭐⭐⭐½ 4.6/5 Editor's Choice
@@ -403,11 +453,13 @@ Return ONLY valid JSON matching this exact structure:
       telegramMarkdown: `🔥 *LOOT DEAL ALERT* 🔥\n\n*${safeP.title.replace(/[*_`]/g, '')}*\n\n💰 *Deal Price:* ${safeP.currentPrice} ~(${safeP.originalPrice})~\n📉 *Offer:* ${safeP.dealScore || safeP.discountPercent}\n\n⚡ *Highlights:*\n• Best price in this segment\n• 100% Genuine with official warranty\n• High customer rating\n\n🛒 *Grab Deal Before Price Increases:*\n👉 ${safeP.affiliateUrl}`,
       whatsappMessage: `🔥 *Price Drop Alert!*\nGet *${safeP.title}* for just *${safeP.currentPrice}* (${safeP.savingsAmount || safeP.discountPercent}) on ${platformName}!\n\n👉 Grab it now: ${safeP.affiliateUrl}`,
       tweetText: `⚡ Price drop alert! Get ${safeP.title.slice(0, 80)} for just ${safeP.currentPrice} (${safeP.discountPercent || 'Save big'}) on #${platformName}!\n\nGrab deal 👉 ${safeP.affiliateUrl}\n#Deals #Shopping #Discount`,
-      pinterestTitle: `Top Pick 2026: ${safeP.title.slice(0, 40)} | ${safeP.discountPercent}`,
-      pinterestDescription: `Check out this top-rated deal on ${platformName}. Highly recommended for quality, durability, and massive savings. Tap to shop directly.`,
-      pinBadgeText: 'TOP RATED DEAL',
+      pinterestTitle: `${safeP.title.slice(0, 42)} • Best ${platformName} Deal (2026)`,
+      pinterestDescription: `Looking for the best deal on ${safeP.title}? Tested for quality, craftsmanship, and verified by ${platformName} buyers. Currently on ${safeP.discountPercent || 'massive'} discount. Tap to grab the official deal before pricing changes!`,
+      pinBadgeText: safeP.discountPercent ? `${safeP.discountPercent} OFF` : 'VERIFIED DEAL',
       pinPriceTag: safeP.currentPrice,
-      pinterestTags: ['#AmazonDeals', '#BestPrice', '#ShoppingInspo', '#OnlineDeals', '#SmartShopping'],
+      pinterestTags: category === 'fashion'
+        ? ['#MensFashion', '#WatchLovers', '#AestheticStyle', '#Horology', '#StyleInspo', '#AmazonFinds', '#EverydayCarry', '#FashionDeals']
+        : ['#TechDeals', '#GadgetReviews', '#ElectronicsDeals', '#BestGadgets', '#AmazonFinds', '#SmartShopping', '#TechLoot', '#TopPicks'],
     };
   }
 

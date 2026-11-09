@@ -171,9 +171,11 @@ Crucial Quality Rules:
     affiliateUrl: string,
     imageUrl: string,
     title: string,
-    description: string = ''
+    description: string = '',
+    tags: string[] = []
   ): string {
-    const fullDescription = `${title} • ${description}`.trim();
+    const tagCluster = tags && tags.length > 0 ? ` ${tags.join(' ')}` : '';
+    const fullDescription = `${title} • ${description}${tagCluster}`.trim();
     return `https://www.pinterest.com/pin/create/button/?url=${encodeURIComponent(
       affiliateUrl
     )}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(fullDescription)}`;
@@ -186,9 +188,10 @@ Crucial Quality Rules:
     affiliateUrl: string,
     imageUrl: string,
     title: string,
-    description: string = ''
+    description: string = '',
+    tags: string[] = []
   ): Promise<boolean> {
-    const pinUrl = this.getPinterestCreatePinUrl(affiliateUrl, imageUrl, title, description);
+    const pinUrl = this.getPinterestCreatePinUrl(affiliateUrl, imageUrl, title, description, tags);
     try {
       const supported = await Linking.canOpenURL(pinUrl);
       if (supported) {

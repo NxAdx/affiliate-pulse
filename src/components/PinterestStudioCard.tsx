@@ -33,6 +33,8 @@ interface PinterestStudioCardProps {
   onImageChanged: (newUrl: string) => void;
   onExportGraphic: () => void;
   statusMessage?: string;
+  seoDescription?: string;
+  tags?: string[];
 }
 
 export const PinterestStudioCard: React.FC<PinterestStudioCardProps> = ({
@@ -50,6 +52,8 @@ export const PinterestStudioCard: React.FC<PinterestStudioCardProps> = ({
   onImageChanged,
   onExportGraphic,
   statusMessage,
+  seoDescription,
+  tags,
 }) => {
   const [copiedKey, setCopiedKey] = React.useState<string | null>(null);
   const [isPastedImage, setIsPastedImage] = React.useState(false);
@@ -67,11 +71,13 @@ export const PinterestStudioCard: React.FC<PinterestStudioCardProps> = ({
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const tagCluster = tags && tags.length > 0 ? `\n\n${tags.join(' ')}` : '';
+    const pinDescription = `${seoDescription || `${discountPercent || 'Best Deal'} • Verified authentic deal with official warranty.`}${tagCluster}`;
     await CinematicStudioService.openPinterestPinBuilder(
       affiliateUrl,
       imageUrl,
       title,
-      `${discountPercent || 'Best Deal'} • Direct Affiliate Link`
+      pinDescription
     );
   };
 
@@ -262,6 +268,14 @@ export const PinterestStudioCard: React.FC<PinterestStudioCardProps> = ({
         </View>
       </View>
 
+      {/* SEO Tag Cluster for Pinterest Search Discoverability */}
+      {tags && tags.length > 0 && (
+        <View style={styles.tagsContainer}>
+          <Text style={styles.tagsLabel}>SEO Search Keywords:</Text>
+          <Text style={styles.tagsText}>{tags.join(' ')}</Text>
+        </View>
+      )}
+
       {/* Status feedback */}
       {statusMessage ? (
         <View style={styles.statusWrap}>
@@ -415,6 +429,28 @@ const styles = StyleSheet.create({
   statusText: {
     color: theme.colors.textMuted,
     fontSize: 10,
+  },
+  tagsContainer: {
+    marginTop: 10,
+    backgroundColor: theme.colors.background,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorder,
+    borderRadius: 8,
+    borderCurve: 'continuous',
+    padding: 8,
+  },
+  tagsLabel: {
+    color: theme.colors.textMuted,
+    fontSize: 10,
+    fontWeight: theme.typography.weights.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  tagsText: {
+    color: theme.colors.primaryLight,
+    fontSize: 11,
+    lineHeight: 16,
   },
 });
 
