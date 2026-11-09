@@ -1,40 +1,44 @@
 {
-    "expo":  {
-                 "name":  "Affiliate Pulse",
-                 "slug":  "affiliate-pulse",
-                 "version":  "1.0.0",
-                 "orientation":  "portrait",
-                 "userInterfaceStyle":  "dark",
-                 "scheme":  "affiliatepulse",
-                 "android":  {
-                                 "package":  "com.nxadx.affiliatepulse",
-                                 "launchMode":  "singleTask",
-                                 "intentFilters":  [
-                                                       {
-                                                           "action":  "SEND",
-                                                           "category":  [
-                                                                            "DEFAULT"
-                                                                        ],
-                                                           "data":  [
-                                                                        {
-                                                                            "mimeType":  "text/*"
-                                                                        },
-                                                                        {
-                                                                            "mimeType":  "text/plain"
-                                                                        }
-                                                                    ]
-                                                       }
-                                                   ],
-                                 "adaptiveIcon":  {
-                                                      "foregroundImage":  "./assets/adaptive-icon.png",
-                                                      "backgroundColor":  "#070A10"
-                                                  }
-                             },
-                 "plugins":  [
-                                 "expo-router",
-                                 "expo-font",
-                                 "expo-share-intent"
-                             ],
-                 "icon":  "./assets/icon.png"
-             }
+  "expo": {
+    "name": "Affiliate Pulse",
+    "slug": "affiliate-pulse",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "affiliatepulse",
+    "android": {
+      "package": "com.nxadx.affiliatepulse",
+      "launchMode": "singleTask",
+      "intentFilters": [
+        {
+          "action": "SEND",
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "mimeType": "text/*"
+            },
+            {
+              "mimeType": "text/plain"
+            }
+          ]
+        }
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#070A10"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-share-intent"
+    ],
+    "icon": "./assets/icon.png",
+    "ios": {
+      "bundleIdentifier": "com.nxadx.affiliatepulse",
+      "supportsTablet": true
+    }
+  }
 }
