@@ -64,23 +64,63 @@ export default function GeneratorScreen() {
 
   const pinCardRef = useRef<any>(null);
   const sessionHuntedAsinsRef = useRef<Set<string>>(new Set());
+  const isInitializedRef = useRef(false);
 
   const { settings, dealsHistory, addDealToHistory, bulkQueue } = useAppStore();
+  const storeActiveProduct = useAppStore((state) => state.activeProduct);
+  const storeActiveContent = useAppStore((state) => state.activeContent);
 
-  // Load latest deal on mount if available
+  // Load active deal from store or latest history on initial mount only
   useEffect(() => {
-    if (dealsHistory.length > 0 && !activeProduct) {
-      const latest = dealsHistory[0];
-      setActiveProduct(latest.product);
-      setActiveContent(latest.content);
-      setCustomTitle(latest.product.title);
-      setCustomPrice(latest.product.currentPrice);
-      setCustomMrp(latest.product.originalPrice || '');
-      setCustomDiscount(latest.product.discountPercent || '');
-      setCustomImageUrl(latest.product.imageUrl || '');
-      setInputUrl(latest.product.originalUrl || latest.product.affiliateUrl || '');
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
+
+    const storeProduct = useAppStore.getState().activeProduct;
+    const storeContent = useAppStore.getState().activeContent;
+
+    if (storeProduct) {
+      setActiveProduct(storeProduct);
+      setActiveContent(storeContent);
+      setCustomTitle(storeProduct.title);
+      setCustomPrice(storeProduct.currentPrice);
+      setCustomMrp(storeProduct.originalPrice || '');
+      setCustomDiscount(storeProduct.discountPercent || '');
+      setCustomImageUrl(storeProduct.imageUrl || '');
+      setInputUrl(storeProduct.originalUrl || storeProduct.affiliateUrl || '');
     }
   }, []);
+
+  // Sync when active product is loaded externally (e.g. from Vault History "Load in Studio")
+  useEffect(() => {
+    if (storeActiveProduct) {
+      setActiveProduct(storeActiveProduct);
+      setActiveContent(storeActiveContent);
+      setCustomTitle(storeActiveProduct.title);
+      setCustomPrice(storeActiveProduct.currentPrice);
+      setCustomMrp(storeActiveProduct.originalPrice || '');
+      setCustomDiscount(storeActiveProduct.discountPercent || '');
+      setCustomImageUrl(storeActiveProduct.imageUrl || '');
+      setInputUrl(storeActiveProduct.originalUrl || storeActiveProduct.affiliateUrl || '');
+    }
+  }, [storeActiveProduct, storeActiveContent]);
+
+  // Dismiss / Clear current active single deal and reset studio back to pristine state
+  const handleClearDeal = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setActiveProduct(null);
+    setActiveContent(null);
+    useAppStore.getState().setActiveProduct(null);
+    useAppStore.getState().setActiveContent(null);
+    setInputUrl('');
+    setCustomTitle('');
+    setCustomPrice('');
+    setCustomMrp('');
+    setCustomDiscount('');
+    setCustomImageUrl('');
+    setBloggerSuccessUrl(null);
+    setStatusMessage('');
+    setPinterestStatusMsg('');
+  };
 
   // --- Handlers ---
 
@@ -112,6 +152,9 @@ export default function GeneratorScreen() {
       const gemini = new GeminiAiService(settings.geminiApiKey);
       const content = await gemini.generateOmnichannelDeal(product, 'all');
       setActiveContent(content);
+
+      useAppStore.getState().setActiveProduct(product);
+      useAppStore.getState().setActiveContent(content);
 
       addDealToHistory({
         id: Date.now().toString(),
@@ -202,6 +245,9 @@ export default function GeneratorScreen() {
       const gemini = new GeminiAiService(settings.geminiApiKey);
       const content = await gemini.generateOmnichannelDeal(product, category);
       setActiveContent(content);
+
+      useAppStore.getState().setActiveProduct(product);
+      useAppStore.getState().setActiveContent(content);
 
       addDealToHistory({
         id: Date.now().toString(),
@@ -427,6 +473,8 @@ export default function GeneratorScreen() {
                 customImageUrl={customImageUrl}
                 onOpenTuning={() => setIsTuningModalVisible(true)}
                 onCopyAffiliateUrl={handleCopyAffiliateUrl}
+                onClear={handleClearDeal}
+                onRemove={handleClearDeal}
                 isCopiedUrl={isCopiedAffiliateUrl}
               />
 
@@ -627,6 +675,7 @@ const styles = StyleSheet.create({
   },
   channelBarScroll: {
     gap: 6,
+    paddingRight: 14,
   },
   channelTab: {
     flexDirection: 'row',

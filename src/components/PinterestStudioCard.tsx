@@ -52,6 +52,7 @@ export const PinterestStudioCard: React.FC<PinterestStudioCardProps> = ({
   statusMessage,
 }) => {
   const [copiedKey, setCopiedKey] = React.useState<string | null>(null);
+  const [isPastedImage, setIsPastedImage] = React.useState(false);
 
   const handleCopyText = async (text: string, key: string) => {
     await Clipboard.setStringAsync(text);
@@ -92,6 +93,8 @@ export const PinterestStudioCard: React.FC<PinterestStudioCardProps> = ({
       if (clean && (clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('data:image'))) {
         onImageChanged(clean);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setIsPastedImage(true);
+        setTimeout(() => setIsPastedImage(false), 2500);
       } else {
         Alert.alert(
           'Clipboard Empty or Invalid',
@@ -117,7 +120,8 @@ export const PinterestStudioCard: React.FC<PinterestStudioCardProps> = ({
           onPress={() => CinematicStudioService.openBoard(targetBoardUrl)}
           activeOpacity={0.7}
         >
-          <Text style={styles.boardLinkText}>fαѕнισи ↗</Text>
+          <Ionicons name="open-outline" size={11} color={theme.colors.pinterest} />
+          <Text style={styles.boardLinkText}>Fashion Board</Text>
         </TouchableOpacity>
       </View>
 
@@ -175,55 +179,87 @@ export const PinterestStudioCard: React.FC<PinterestStudioCardProps> = ({
         <Text style={styles.primaryPinBtnText}>Create Clickable Pin (1-Tap)</Text>
       </TouchableOpacity>
 
-      {/* Secondary Clean Utility Row: ChatGPT Prompt & Image Sync */}
-      <View style={styles.utilityRow}>
-        <TouchableOpacity
-          style={[styles.utilityBtn, styles.utilityBtnPrimary]}
-          onPress={handleCopyChatGptPrompt}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name={copiedKey === 'chatgpt' ? 'checkmark' : 'sparkles'}
-            size={13}
-            color={theme.colors.primaryLight}
-          />
-          <Text style={styles.utilityBtnTextPrimary}>
-            {copiedKey === 'chatgpt' ? 'Prompt Copied!' : 'Copy ChatGPT Prompt'}
-          </Text>
-        </TouchableOpacity>
+      {/* Studio Utility Actions (2x2 Balanced Grid) */}
+      <View style={styles.utilityGrid}>
+        {/* Row 1: AI Prompt & Image Update */}
+        <View style={styles.utilityRow}>
+          <TouchableOpacity
+            style={[styles.utilityBtn, copiedKey === 'chatgpt' && styles.utilityBtnSuccess]}
+            onPress={handleCopyChatGptPrompt}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name={copiedKey === 'chatgpt' ? 'checkmark-circle' : 'sparkles'}
+              size={13}
+              color={copiedKey === 'chatgpt' ? theme.colors.accentDeal : theme.colors.primaryLight}
+            />
+            <Text
+              style={[
+                styles.utilityBtnText,
+                copiedKey === 'chatgpt' && styles.utilityBtnTextSuccess,
+              ]}
+              numberOfLines={1}
+            >
+              {copiedKey === 'chatgpt' ? 'Prompt Copied!' : 'Copy AI Prompt'}
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.utilityBtn}
-          onPress={handlePasteImageFromClipboard}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="clipboard-outline" size={13} color={theme.colors.textSecondary} />
-          <Text style={styles.utilityBtnText}>Paste New Image</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.utilityBtn, isPastedImage && styles.utilityBtnSuccess]}
+            onPress={handlePasteImageFromClipboard}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name={isPastedImage ? 'checkmark-circle' : 'clipboard-outline'}
+              size={13}
+              color={isPastedImage ? theme.colors.accentDeal : theme.colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.utilityBtnText,
+                isPastedImage && styles.utilityBtnTextSuccess,
+              ]}
+              numberOfLines={1}
+            >
+              {isPastedImage ? 'Image Pasted!' : 'Paste New Image'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity
-          style={styles.utilityBtn}
-          onPress={handleCopyProductImage}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name={copiedKey === 'image' ? 'checkmark' : 'link-outline'}
-            size={13}
-            color={theme.colors.textSecondary}
-          />
-          <Text style={styles.utilityBtnText}>
-            {copiedKey === 'image' ? 'Copied' : 'Copy Img'}
-          </Text>
-        </TouchableOpacity>
+        {/* Row 2: Asset Management & Export */}
+        <View style={styles.utilityRow}>
+          <TouchableOpacity
+            style={[styles.utilityBtn, copiedKey === 'image' && styles.utilityBtnSuccess]}
+            onPress={handleCopyProductImage}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name={copiedKey === 'image' ? 'checkmark-circle' : 'image-outline'}
+              size={13}
+              color={copiedKey === 'image' ? theme.colors.accentDeal : theme.colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.utilityBtnText,
+                copiedKey === 'image' && styles.utilityBtnTextSuccess,
+              ]}
+              numberOfLines={1}
+            >
+              {copiedKey === 'image' ? 'Link Copied!' : 'Copy Image Link'}
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.utilityBtn}
-          onPress={onExportGraphic}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="camera-outline" size={13} color={theme.colors.textSecondary} />
-          <Text style={styles.utilityBtnText}>PNG</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.utilityBtn}
+            onPress={onExportGraphic}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="share-outline" size={13} color={theme.colors.textSecondary} />
+            <Text style={styles.utilityBtnText} numberOfLines={1}>
+              Export Pin Graphic
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Status feedback */}
@@ -263,11 +299,16 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.weights.semibold,
   },
   boardLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(230, 0, 35, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(230, 0, 35, 0.25)',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 6,
     borderCurve: 'continuous',
+    gap: 4,
   },
   boardLinkText: {
     color: theme.colors.pinterest,
@@ -326,11 +367,14 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.sizes.sm,
     fontWeight: theme.typography.weights.semibold,
   },
+  utilityGrid: {
+    marginTop: 10,
+    gap: 8,
+  },
   utilityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    gap: 6,
+    gap: 8,
   },
   utilityBtn: {
     flex: 1,
@@ -340,24 +384,23 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceElevated,
     borderWidth: 1,
     borderColor: theme.colors.surfaceBorder,
-    height: 36,
-    borderRadius: 8,
+    height: 38,
+    borderRadius: 10,
     borderCurve: 'continuous',
-    gap: 4,
+    paddingHorizontal: 8,
+    gap: 6,
   },
-  utilityBtnPrimary: {
-    flex: 1.8,
-    backgroundColor: 'rgba(99, 102, 241, 0.12)',
-    borderColor: 'rgba(99, 102, 241, 0.3)',
+  utilityBtnSuccess: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   utilityBtnText: {
     color: theme.colors.textSecondary,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: theme.typography.weights.medium,
   },
-  utilityBtnTextPrimary: {
-    color: theme.colors.primaryLight,
-    fontSize: 11,
+  utilityBtnTextSuccess: {
+    color: theme.colors.accentDeal,
     fontWeight: theme.typography.weights.semibold,
   },
   statusWrap: {
@@ -374,3 +417,4 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
 });
+

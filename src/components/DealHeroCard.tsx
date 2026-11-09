@@ -14,6 +14,8 @@ interface DealHeroCardProps {
   customImageUrl?: string;
   onOpenTuning: () => void;
   onCopyAffiliateUrl: () => void;
+  onRemove?: () => void;
+  onClear?: () => void;
   isCopiedUrl?: boolean;
 }
 
@@ -26,6 +28,8 @@ export const DealHeroCard: React.FC<DealHeroCardProps> = ({
   customImageUrl,
   onOpenTuning,
   onCopyAffiliateUrl,
+  onRemove,
+  onClear,
   isCopiedUrl,
 }) => {
   const displayTitle = customTitle || product.title;
@@ -45,24 +49,43 @@ export const DealHeroCard: React.FC<DealHeroCardProps> = ({
         {product.dealScore ? (
           <View style={styles.scoreBadge}>
             <Ionicons name="shield-checkmark" size={11} color={theme.colors.accentDeal} />
-            <Text style={styles.scoreText}>SCORE: {product.dealScore}</Text>
+            <Text style={styles.scoreText} numberOfLines={1}>
+              {product.dealScore.startsWith('SCORE:') ? product.dealScore : `SCORE: ${product.dealScore}`}
+            </Text>
           </View>
         ) : null}
 
         <View style={{ flex: 1 }} />
 
-        {/* Edit Pencil Button (Opens Sheet without Layout Shift) */}
-        <TouchableOpacity
-          style={styles.editBtn}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            onOpenTuning();
-          }}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="pencil" size={12} color={theme.colors.textSecondary} />
-          <Text style={styles.editText}>Edit</Text>
-        </TouchableOpacity>
+        {/* Action Buttons: Edit & Clear/Remove */}
+        <View style={styles.metaActions}>
+          <TouchableOpacity
+            style={styles.editBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onOpenTuning();
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="pencil" size={12} color={theme.colors.textSecondary} />
+            <Text style={styles.editText}>Edit</Text>
+          </TouchableOpacity>
+
+          {(onRemove || onClear) && (
+            <TouchableOpacity
+              style={styles.clearBtn}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                if (onClear) onClear();
+                else if (onRemove) onRemove();
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={12} color={theme.colors.accentDanger} />
+              <Text style={styles.clearText}>Clear</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Main Content Layout: Image + Details */}
@@ -97,30 +120,48 @@ export const DealHeroCard: React.FC<DealHeroCardProps> = ({
             ) : null}
           </View>
 
-          {/* Copy Affiliate Link Button */}
-          <TouchableOpacity
-            style={styles.affiliateUrlBtn}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onCopyAffiliateUrl();
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name={isCopiedUrl ? 'checkmark-circle' : 'link-outline'}
-              size={13}
-              color={isCopiedUrl ? theme.colors.accentDeal : theme.colors.primaryLight}
-            />
-            <Text
-              style={[
-                styles.affiliateUrlText,
-                isCopiedUrl && { color: theme.colors.accentDeal },
-              ]}
-              numberOfLines={1}
+          {/* Actions Row: Copy Link & Remove */}
+          <View style={styles.actionsRow}>
+            <TouchableOpacity
+              style={styles.affiliateUrlBtn}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onCopyAffiliateUrl();
+              }}
+              activeOpacity={0.7}
             >
-              {isCopiedUrl ? 'Affiliate Link Copied!' : 'Copy Clean Affiliate Link'}
-            </Text>
-          </TouchableOpacity>
+              <Ionicons
+                name={isCopiedUrl ? 'checkmark-circle' : 'link-outline'}
+                size={13}
+                color={isCopiedUrl ? theme.colors.accentDeal : theme.colors.primaryLight}
+              />
+              <Text
+                style={[
+                  styles.affiliateUrlText,
+                  isCopiedUrl && { color: theme.colors.accentDeal },
+                ]}
+                numberOfLines={1}
+              >
+                {isCopiedUrl ? 'Copied Link!' : 'Copy Clean Link'}
+              </Text>
+            </TouchableOpacity>
+
+            {(onRemove || onClear) && (
+              <TouchableOpacity
+                style={styles.removeBtn}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  if (onClear) onClear();
+                  else if (onRemove) onRemove();
+                }}
+                activeOpacity={0.7}
+                accessibilityLabel="Remove deal"
+              >
+                <Ionicons name="trash-outline" size={12} color={theme.colors.accentDanger} />
+                <Text style={styles.removeText}>Remove</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     </View>
@@ -165,16 +206,24 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderCurve: 'continuous',
     gap: 4,
+    flexShrink: 1,
   },
   scoreText: {
     color: theme.colors.accentDeal,
     fontSize: 10,
     fontWeight: theme.typography.weights.bold,
   },
+  metaActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   editBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorder,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -183,6 +232,23 @@ const styles = StyleSheet.create({
   },
   editText: {
     color: theme.colors.textSecondary,
+    fontSize: 11,
+    fontWeight: theme.typography.weights.medium,
+  },
+  clearBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderCurve: 'continuous',
+    gap: 4,
+  },
+  clearText: {
+    color: theme.colors.accentDanger,
     fontSize: 11,
     fontWeight: theme.typography.weights.medium,
   },
@@ -242,7 +308,15 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.weights.bold,
     fontVariant: ['tabular-nums'],
   },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 2,
+  },
   affiliateUrlBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
@@ -253,4 +327,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: theme.typography.weights.medium,
   },
+  removeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+  },
+  removeText: {
+    color: theme.colors.accentDanger,
+    fontSize: 11,
+    fontWeight: theme.typography.weights.medium,
+  },
 });
+

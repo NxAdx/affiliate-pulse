@@ -117,18 +117,18 @@ export const BloggerStudioCard: React.FC<BloggerStudioCardProps> = ({
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.utilityBtn}
+          style={[styles.utilityBtn, isCopiedHtml && styles.utilityBtnSuccess]}
           onPress={handleCopyHtml}
           disabled={!htmlContent}
           activeOpacity={0.7}
         >
           <Ionicons
-            name={isCopiedHtml ? 'checkmark' : 'copy-outline'}
+            name={isCopiedHtml ? 'checkmark-circle' : 'copy-outline'}
             size={13}
             color={isCopiedHtml ? theme.colors.accentDeal : theme.colors.textSecondary}
           />
-          <Text style={[styles.utilityBtnText, isCopiedHtml && { color: theme.colors.accentDeal }]}>
-            {isCopiedHtml ? 'Copied' : 'Copy HTML'}
+          <Text style={[styles.utilityBtnText, isCopiedHtml && styles.utilityBtnTextSuccess]}>
+            {isCopiedHtml ? 'HTML Copied!' : 'Copy HTML'}
           </Text>
         </TouchableOpacity>
 
@@ -271,15 +271,24 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceElevated,
     borderWidth: 1,
     borderColor: theme.colors.surfaceBorder,
-    height: 36,
-    borderRadius: 8,
+    height: 38,
+    borderRadius: 10,
     borderCurve: 'continuous',
-    gap: 4,
+    paddingHorizontal: 8,
+    gap: 6,
+  },
+  utilityBtnSuccess: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   utilityBtnText: {
     color: theme.colors.textSecondary,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: theme.typography.weights.medium,
+  },
+  utilityBtnTextSuccess: {
+    color: theme.colors.accentDeal,
+    fontWeight: theme.typography.weights.semibold,
   },
   modalContainer: {
     flex: 1,
@@ -311,3 +320,4 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 });
+

@@ -34,7 +34,7 @@ function PortalLink({ label, url }: PortalLinkProps) {
       <Text style={styles.portalLinkText} numberOfLines={1}>
         {label}
       </Text>
-      <Ionicons name="arrow-forward" size={10} color={theme.colors.primaryLight} />
+      <Ionicons name="open-outline" size={10} color={theme.colors.primaryLight} />
     </TouchableOpacity>
   );
 }
@@ -208,7 +208,7 @@ export default function SettingsScreen() {
         <View style={styles.inputGroup}>
           <View style={styles.labelRow}>
             <Text style={styles.label} numberOfLines={1}>Amazon Associate Tag</Text>
-            <PortalLink label="Portal ↗" url="https://affiliate-program.amazon.in/" />
+            <PortalLink label="Portal" url="https://affiliate-program.amazon.in/" />
           </View>
           <View style={styles.inputWrapper}>
             <Ionicons name="logo-amazon" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
@@ -228,7 +228,7 @@ export default function SettingsScreen() {
         <View style={styles.inputGroup}>
           <View style={styles.labelRow}>
             <Text style={styles.label} numberOfLines={1}>Flipkart Affiliate ID</Text>
-            <PortalLink label="Portal ↗" url="https://affiliate.flipkart.com/" />
+            <PortalLink label="Portal" url="https://affiliate.flipkart.com/" />
           </View>
           <View style={styles.inputWrapper}>
             <Ionicons name="cart-outline" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
@@ -248,7 +248,7 @@ export default function SettingsScreen() {
         <View style={styles.inputGroup}>
           <View style={styles.labelRow}>
             <Text style={styles.label} numberOfLines={1}>EarnKaro / Cuelinks Token</Text>
-            <PortalLink label="Profile ↗" url="https://earnkaro.com/profile" />
+            <PortalLink label="Profile" url="https://earnkaro.com/profile" />
           </View>
           <View style={styles.inputWrapper}>
             <Ionicons name="link-outline" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
@@ -272,14 +272,14 @@ export default function SettingsScreen() {
             <Ionicons name="globe-outline" size={16} color={theme.colors.blogger} />
             <Text style={styles.cardTitle}>Google Blogger</Text>
           </View>
-          <PortalLink label="Admin ↗" url="https://www.blogger.com/" />
+          <PortalLink label="Admin" url="https://www.blogger.com/" />
         </View>
 
         {/* 1. Google Apps Script Webhook (Direct & Permanent 1-Tap) */}
         <View style={styles.inputGroup}>
           <View style={styles.labelRow}>
             <Text style={styles.label} numberOfLines={1}>Publishing Webhook</Text>
-            <PortalLink label="Console ↗" url="https://script.google.com/" />
+            <PortalLink label="Console" url="https://script.google.com/" />
           </View>
           <View style={styles.inputWrapper}>
             <Ionicons name="flash-outline" size={15} color={theme.colors.accentDeal} style={styles.inputIcon} />
@@ -356,7 +356,7 @@ export default function SettingsScreen() {
             <Ionicons name="paper-plane-outline" size={16} color={theme.colors.telegram} />
             <Text style={styles.cardTitle}>Telegram Deal Channel</Text>
           </View>
-          <PortalLink label="BotFather ↗" url="https://t.me/BotFather" />
+          <PortalLink label="BotFather" url="https://t.me/BotFather" />
         </View>
 
         <View style={styles.inputGroup}>
@@ -379,7 +379,7 @@ export default function SettingsScreen() {
         <View style={styles.inputGroup}>
           <View style={styles.labelRow}>
             <Text style={styles.label} numberOfLines={1}>Telegram Channel ID</Text>
-            <PortalLink label="ID Bot ↗" url="https://t.me/username_to_id_bot" />
+            <PortalLink label="ID Bot" url="https://t.me/username_to_id_bot" />
           </View>
           <View style={styles.inputWrapper}>
             <Ionicons name="megaphone-outline" size={15} color={theme.colors.textMuted} style={styles.inputIcon} />
@@ -437,7 +437,7 @@ export default function SettingsScreen() {
             <Ionicons name="logo-pinterest" size={16} color={theme.colors.pinterest} />
             <Text style={styles.cardTitle}>Pinterest Board (Visual Search)</Text>
           </View>
-          <PortalLink label="Board ↗" url={pinterestBoard || 'https://pinterest.com'} />
+          <PortalLink label="Board" url={pinterestBoard || 'https://pinterest.com'} />
         </View>
 
         <View style={styles.inputGroup}>

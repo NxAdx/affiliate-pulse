@@ -71,17 +71,17 @@ export const BroadcastStudioCard: React.FC<BroadcastStudioCardProps> = ({
         </View>
 
         <TouchableOpacity
-          style={styles.copyPill}
+          style={[styles.copyPill, isCopied && styles.copyPillSuccess]}
           onPress={handleCopy}
           disabled={!copyText}
           activeOpacity={0.7}
         >
           <Ionicons
-            name={isCopied ? 'checkmark' : 'copy-outline'}
+            name={isCopied ? 'checkmark-circle' : 'copy-outline'}
             size={12}
             color={isCopied ? theme.colors.accentDeal : theme.colors.textSecondary}
           />
-          <Text style={[styles.copyPillText, isCopied && { color: theme.colors.accentDeal }]}>
+          <Text style={[styles.copyPillText, isCopied && styles.copyPillTextSuccess]}>
             {isCopied ? 'Copied' : 'Copy'}
           </Text>
         </TouchableOpacity>
@@ -175,16 +175,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorder,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderCurve: 'continuous',
     gap: 4,
   },
+  copyPillSuccess: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+  },
   copyPillText: {
     color: theme.colors.textSecondary,
     fontSize: 11,
     fontWeight: theme.typography.weights.medium,
+  },
+  copyPillTextSuccess: {
+    color: theme.colors.accentDeal,
+    fontWeight: theme.typography.weights.semibold,
   },
   previewBox: {
     backgroundColor: theme.colors.background,
@@ -221,7 +231,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
-    gap: 6,
+    gap: 8,
   },
   utilityBtn: {
     flex: 1,
@@ -231,14 +241,16 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceElevated,
     borderWidth: 1,
     borderColor: theme.colors.surfaceBorder,
-    height: 36,
-    borderRadius: 8,
+    height: 38,
+    borderRadius: 10,
     borderCurve: 'continuous',
-    gap: 4,
+    paddingHorizontal: 8,
+    gap: 6,
   },
   utilityBtnText: {
     color: theme.colors.textSecondary,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: theme.typography.weights.medium,
   },
 });
+

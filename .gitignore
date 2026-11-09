@@ -1,4 +1,4 @@
-# Dependencies
+﻿# Dependencies
 node_modules/
 .expo/
 dist/
@@ -24,3 +24,9 @@ ios/
 *.log
 *.tmp
 scratch/
+
+.codex/
+.github/skills/
+.github/agents/
+.github/hooks/
+*.exe

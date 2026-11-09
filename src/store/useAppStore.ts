@@ -135,6 +135,8 @@ export const useAppStore = create<AppState>()(
         dealsHistory: state.dealsHistory,
         selectedCategory: state.selectedCategory,
         bulkQueue: state.bulkQueue,
+        activeProduct: state.activeProduct,
+        activeContent: state.activeContent,
       }),
     }
   )
