@@ -20,7 +20,7 @@ const CONFIG = {
   telegramToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramChannel: process.env.TELEGRAM_CHANNEL_ID || '',
   amazonTag: process.env.AMAZON_ASSOCIATE_TAG || 'dealhunter-21',
-  bloggerBlogId: process.env.BLOGGER_BLOG_ID || '',
+  bloggerBlogId: process.env.BLOGGER_BLOG_ID || '4105733030604942075',
   bloggerWebhookUrl:
     process.env.BLOGGER_WEBHOOK_URL ||
     'https://script.google.com/macros/s/AKfycbxh1BaXpDleljcWtTW_WSTtO-ks7UfQYQ78TkLVnYbpdgW15EiB5RycAIhgruAiRZPQ/exec',
