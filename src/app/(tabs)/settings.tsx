@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAppStore } from '../../store/useAppStore';
 import { theme } from '../../theme';
-import { BloggerService, DEFAULT_BLOGGER_WEBHOOK } from '../../services/bloggerApi';
+import { BloggerService, DEFAULT_BLOGGER_WEBHOOK, DEFAULT_BLOGGER_BLOG_ID } from '../../services/bloggerApi';
 import { TelegramService } from '../../services/telegramBot';
 
 interface PortalLinkProps {
@@ -46,7 +46,9 @@ export default function SettingsScreen() {
   const [amazonTag, setAmazonTag] = useState(settings.amazonAffiliateTag);
   const [flipkartTag, setFlipkartTag] = useState(settings.flipkartAffiliateTag);
   const [earnkaroToken, setEarnkaroToken] = useState(settings.earnkaroToken);
-  const [bloggerBlogId, setBloggerBlogId] = useState(settings.bloggerBlogId);
+  const [bloggerBlogId, setBloggerBlogId] = useState(
+    settings.bloggerBlogId || DEFAULT_BLOGGER_BLOG_ID
+  );
   const [bloggerWebhookUrl, setBloggerWebhookUrl] = useState(
     settings.bloggerWebhookUrl?.trim() || DEFAULT_BLOGGER_WEBHOOK
   );
@@ -54,6 +56,7 @@ export default function SettingsScreen() {
   const [telegramToken, setTelegramToken] = useState(settings.telegramBotToken);
   const [telegramChannel, setTelegramChannel] = useState(settings.telegramChannelId);
   const [pinterestBoard, setPinterestBoard] = useState(settings.pinterestBoardId || 'https://in.pinterest.com/aadarshlokhande/f%ce%b1%d1%95%d0%bd%ce%b9%cf%83%d0%b8/');
+  const [autoSyndicate, setAutoSyndicate] = useState(settings.autoSyndicateOnShare ?? true);
 
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [isTestingBlogger, setIsTestingBlogger] = useState(false);
@@ -74,11 +77,12 @@ export default function SettingsScreen() {
     setAmazonTag(settings.amazonAffiliateTag);
     setFlipkartTag(settings.flipkartAffiliateTag);
     setEarnkaroToken(settings.earnkaroToken);
-    setBloggerBlogId(settings.bloggerBlogId);
+    setBloggerBlogId(settings.bloggerBlogId || DEFAULT_BLOGGER_BLOG_ID);
     setBloggerWebhookUrl(settings.bloggerWebhookUrl?.trim() || DEFAULT_BLOGGER_WEBHOOK);
     setTelegramToken(settings.telegramBotToken);
     setTelegramChannel(settings.telegramChannelId);
     setPinterestBoard(settings.pinterestBoardId || 'https://in.pinterest.com/aadarshlokhande/f%ce%b1%d1%95%d0%bd%ce%b9%cf%83%d0%b8/');
+    setAutoSyndicate(settings.autoSyndicateOnShare ?? true);
   }, [settings]);
 
   const handleSave = () => {
@@ -88,11 +92,12 @@ export default function SettingsScreen() {
       amazonAffiliateTag: amazonTag.trim(),
       flipkartAffiliateTag: flipkartTag.trim(),
       earnkaroToken: earnkaroToken.trim(),
-      bloggerBlogId: bloggerBlogId.trim(),
+      bloggerBlogId: (bloggerBlogId.trim() || DEFAULT_BLOGGER_BLOG_ID),
       bloggerWebhookUrl: bloggerWebhookUrl.trim() || DEFAULT_BLOGGER_WEBHOOK,
       telegramBotToken: telegramToken.trim(),
       telegramChannelId: telegramChannel.trim(),
       pinterestBoardId: pinterestBoard.trim(),
+      autoSyndicateOnShare: autoSyndicate,
     });
     setSavedFeedback(true);
     setTimeout(() => setSavedFeedback(false), 3500);

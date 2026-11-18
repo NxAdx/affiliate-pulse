@@ -7,13 +7,23 @@ export interface BloggerPostPayload {
 export const DEFAULT_BLOGGER_WEBHOOK =
   'https://script.google.com/macros/s/AKfycbxh1BaXpDleljcWtTW_WSTtO-ks7UfQYQ78TkLVnYbpdgW15EiB5RycAIhgruAiRZPQ/exec';
 
+export const DEFAULT_BLOGGER_BLOG_ID = '4105733030604942075';
+
 function cleanBloggerError(rawError: string): string {
   if (!rawError) return 'Unknown Blogger error';
   if (rawError.includes('SERVICE_DISABLED') || rawError.includes('Blogger API has not been used')) {
-    return 'Blogger API v3 is disabled in Google Cloud. Click the link in Google Cloud Console to Enable it.';
+    return 'Blogger API v3 is disabled in Google Cloud. In Apps Script -> Services (+) -> Enable Blogger API v3.';
   }
-  if (rawError.includes('Sign in - Google Accounts') || rawError.includes('accounts.google.com')) {
-    return 'Google Sign-In Required: In Apps Script -> Deploy -> Manage Deployments -> set "Who has access" to "Anyone".';
+  if (
+    rawError.includes('Sign in - Google Accounts') ||
+    rawError.includes('accounts.google.com') ||
+    rawError.includes('You need access') ||
+    rawError.includes('You need permission') ||
+    rawError.includes('docs.google.com/accounts') ||
+    rawError.includes('request-access-icon') ||
+    rawError.includes('403')
+  ) {
+    return '⚠️ Google Apps Script 403 Forbidden: In script.google.com -> Deploy -> Manage Deployments -> Edit -> set "Who has access" to "Anyone" and deploy as "New version".';
   }
   return rawError;
 }
@@ -23,8 +33,9 @@ export class BloggerService {
    * Helper to get direct web link to Blogger Dashboard / Create Post editor
    */
   static getWebEditorUrl(blogId?: string): string {
-    if (blogId && blogId.trim()) {
-      return `https://www.blogger.com/blog/posts/${blogId.trim()}`;
+    const id = blogId?.trim() || DEFAULT_BLOGGER_BLOG_ID;
+    if (id) {
+      return `https://www.blogger.com/blog/posts/${id}`;
     }
     return 'https://www.blogger.com/go/createpost';
   }
@@ -37,6 +48,7 @@ export class BloggerService {
     webhookUrl?: string
   ): Promise<{ success: boolean; blogName?: string; blogUrl?: string; error?: string }> {
     const url = webhookUrl?.trim() || DEFAULT_BLOGGER_WEBHOOK;
+    const targetBlogId = blogId?.trim() || DEFAULT_BLOGGER_BLOG_ID;
 
     if (!url.startsWith('https://script.google.com/macros/s/')) {
       return {
@@ -53,23 +65,28 @@ export class BloggerService {
         },
         body: JSON.stringify({
           test: true,
-          blogId: blogId?.trim() || '',
+          blogId: targetBlogId,
         }),
         redirect: 'follow',
       });
 
       const rawText = await response.text();
 
-      // Check for Google Accounts sign-in challenge
+      // Check for Google Accounts sign-in challenge or 403 access restriction
       if (
         response.status === 401 ||
+        response.status === 403 ||
         rawText.includes('Sign in - Google Accounts') ||
-        rawText.includes('accounts.google.com')
+        rawText.includes('accounts.google.com') ||
+        rawText.includes('You need access') ||
+        rawText.includes('You need permission') ||
+        rawText.includes('docs.google.com/accounts') ||
+        rawText.includes('request-access-icon')
       ) {
         return {
           success: false,
           error:
-            '⚠️ Google Sign-In Required: In script.google.com -> Deploy -> Manage Deployments -> Edit -> set "Who has access" to "Anyone" and deploy as "New version".',
+            '⚠️ Webhook Access Denied (403): In script.google.com -> Deploy -> Manage Deployments -> Edit -> set "Who has access" to "Anyone" and deploy as "New version".',
         };
       }
 
@@ -83,20 +100,13 @@ export class BloggerService {
         }
         return {
           success: true,
-          blogName: json.message || 'Google Apps Script Webhook Active',
+          blogName: json.message || 'Google Apps Script Webhook Active & Verified',
           blogUrl: url,
         };
       } catch {
-        if (response.ok) {
-          return {
-            success: true,
-            blogName: 'Google Apps Script Webhook Connected',
-            blogUrl: url,
-          };
-        }
         return {
           success: false,
-          error: `Webhook returned status ${response.status}`,
+          error: `Webhook returned invalid non-JSON response (${response.status}): ${rawText.substring(0, 100).trim()}...`,
         };
       }
     } catch (err: any) {
@@ -117,6 +127,7 @@ export class BloggerService {
     webhookUrl?: string
   ): Promise<{ success: boolean; url?: string; error?: string }> {
     const url = webhookUrl?.trim() || DEFAULT_BLOGGER_WEBHOOK;
+    const targetBlogId = blogId?.trim() || DEFAULT_BLOGGER_BLOG_ID;
 
     if (!url) {
       return { success: false, error: 'Missing Blogger Webhook URL. Please configure it in Settings.' };
@@ -129,7 +140,7 @@ export class BloggerService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          blogId: blogId?.trim() || '',
+          blogId: targetBlogId,
           title: payload.title,
           content: payload.content,
           labels: payload.labels || ['Product Review', 'Deals', 'Tech'],
@@ -141,13 +152,18 @@ export class BloggerService {
 
       if (
         response.status === 401 ||
+        response.status === 403 ||
         rawText.includes('Sign in - Google Accounts') ||
-        rawText.includes('accounts.google.com')
+        rawText.includes('accounts.google.com') ||
+        rawText.includes('You need access') ||
+        rawText.includes('You need permission') ||
+        rawText.includes('docs.google.com/accounts') ||
+        rawText.includes('request-access-icon')
       ) {
         return {
           success: false,
           error:
-            'Google Sign-In Required: Ensure "Who has access" is set to "Anyone" in your Apps Script deployment.',
+            '⚠️ Webhook Access Denied (403): In script.google.com -> Deploy -> Manage Deployments -> Edit -> set "Who has access" to "Anyone" and deploy as "New version".',
         };
       }
 
@@ -161,18 +177,12 @@ export class BloggerService {
         }
         return {
           success: true,
-          url: json.url || (blogId ? `https://www.blogger.com/blog/posts/${blogId.trim()}` : undefined),
+          url: json.url || (targetBlogId ? `https://www.blogger.com/blog/posts/${targetBlogId}` : undefined),
         };
       } catch {
-        if (response.ok) {
-          return {
-            success: true,
-            url: blogId ? `https://www.blogger.com/blog/posts/${blogId.trim()}` : undefined,
-          };
-        }
         return {
           success: false,
-          error: `Publish failed (${response.status}): ${rawText.substring(0, 150)}`,
+          error: `Webhook returned invalid HTML (${response.status}). Expected JSON confirmation. Ensure Webhook is deployed with access "Anyone".`,
         };
       }
     } catch (err: any) {

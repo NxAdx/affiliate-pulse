@@ -81,6 +81,7 @@ export interface AppSettings {
   telegramBotToken: string;
   telegramChannelId: string;
   pinterestBoardId: string;
+  autoSyndicateOnShare?: boolean;
 }
 
 export type BulkItemStatus = 'idle' | 'scraping' | 'generating' | 'publishing' | 'done' | 'failed';

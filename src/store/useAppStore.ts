@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import { MMKV } from 'react-native-mmkv';
 import { AppSettings, DealCategory, DealRecord, ProductMetadata, GeneratedContent, BulkQueueItem } from '../types';
-import { DEFAULT_BLOGGER_WEBHOOK } from '../services/bloggerApi';
+import { DEFAULT_BLOGGER_WEBHOOK, DEFAULT_BLOGGER_BLOG_ID } from '../services/bloggerApi';
 
 let mmkvInstance: MMKV | null = null;
 try {
@@ -74,13 +74,14 @@ const DEFAULT_SETTINGS: AppSettings = {
   amazonAffiliateTag: '',
   flipkartAffiliateTag: '',
   earnkaroToken: '',
-  bloggerBlogId: '',
+  bloggerBlogId: DEFAULT_BLOGGER_BLOG_ID,
   bloggerAccessToken: '',
   bloggerWebhookUrl: DEFAULT_BLOGGER_WEBHOOK,
   bloggerEmail: '',
   telegramBotToken: '',
   telegramChannelId: '',
   pinterestBoardId: 'https://in.pinterest.com/aadarshlokhande/f%ce%b1%d1%95%d0%bd%ce%b9%cf%83%d0%b8/',
+  autoSyndicateOnShare: true,
 };
 
 export const useAppStore = create<AppState>()(

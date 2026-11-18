@@ -29,6 +29,7 @@ import { DealTuningModal } from '../../components/DealTuningModal';
 import { PinterestStudioCard } from '../../components/PinterestStudioCard';
 import { BloggerStudioCard } from '../../components/BloggerStudioCard';
 import { BroadcastStudioCard } from '../../components/BroadcastStudioCard';
+import { OmnichannelSyndicateBar } from '../../components/OmnichannelSyndicateBar';
 import { CinematicPresetKey } from '../../services/cinematicStudio';
 import { useShareIntent } from 'expo-share-intent';
 
@@ -63,11 +64,18 @@ export default function GeneratorScreen() {
   const [bloggerSuccessUrl, setBloggerSuccessUrl] = useState<string | null>(null);
   const [isBroadcastingTelegram, setIsBroadcastingTelegram] = useState(false);
 
+  // Omnichannel Autopilot Syndication State
+  const [isSyndicatingAll, setIsSyndicatingAll] = useState(false);
+  const [telegramSyndicateStatus, setTelegramSyndicateStatus] = useState<'idle' | 'publishing' | 'success' | 'failed'>('idle');
+  const [bloggerSyndicateStatus, setBloggerSyndicateStatus] = useState<'idle' | 'publishing' | 'success' | 'failed'>('idle');
+  const [telegramSyndicateError, setTelegramSyndicateError] = useState<string | undefined>();
+  const [bloggerSyndicateError, setBloggerSyndicateError] = useState<string | undefined>();
+
   const pinCardRef = useRef<any>(null);
   const sessionHuntedAsinsRef = useRef<Set<string>>(new Set());
   const isInitializedRef = useRef(false);
 
-  const { settings, dealsHistory, addDealToHistory, bulkQueue } = useAppStore();
+  const { settings, dealsHistory, addDealToHistory, bulkQueue, updateSettings } = useAppStore();
   const storeActiveProduct = useAppStore((state) => state.activeProduct);
   const storeActiveContent = useAppStore((state) => state.activeContent);
 
@@ -121,6 +129,95 @@ export default function GeneratorScreen() {
     setBloggerSuccessUrl(null);
     setStatusMessage('');
     setPinterestStatusMsg('');
+    setTelegramSyndicateStatus('idle');
+    setBloggerSyndicateStatus('idle');
+    setTelegramSyndicateError(undefined);
+    setBloggerSyndicateError(undefined);
+  };
+
+  // Omnichannel 1-Tap Autopilot Syndication Engine
+  const executeSyndication = async (
+    product: ProductMetadata,
+    content: GeneratedContent
+  ) => {
+    setIsSyndicatingAll(true);
+    setTelegramSyndicateStatus('publishing');
+    setBloggerSyndicateStatus('publishing');
+    setTelegramSyndicateError(undefined);
+    setBloggerSyndicateError(undefined);
+    setStatusMessage('⚡ Syndicating across active channels...');
+
+    let tgSuccess = false;
+    let bgSuccess = false;
+
+    // 1. Broadcast to Telegram Channel
+    try {
+      if (!settings.telegramBotToken?.trim() || !settings.telegramChannelId?.trim()) {
+        setTelegramSyndicateStatus('failed');
+        setTelegramSyndicateError('Telegram Bot Token or Channel ID missing in Settings');
+      } else if (!content.telegramMarkdown) {
+        setTelegramSyndicateStatus('failed');
+        setTelegramSyndicateError('No Telegram promotional copy available');
+      } else {
+        const tgResult = await TelegramService.broadcastDeal(
+          settings.telegramBotToken,
+          settings.telegramChannelId,
+          content.telegramMarkdown,
+          customImageUrl || product.imageUrl
+        );
+        if (tgResult.success) {
+          setTelegramSyndicateStatus('success');
+          tgSuccess = true;
+        } else {
+          setTelegramSyndicateStatus('failed');
+          setTelegramSyndicateError(tgResult.error || 'Failed to broadcast to Telegram');
+        }
+      }
+    } catch (tgErr: any) {
+      setTelegramSyndicateStatus('failed');
+      setTelegramSyndicateError(tgErr?.message || 'Telegram broadcast failed');
+    }
+
+    // 2. Publish to Google Blogger (GadgetNX)
+    try {
+      if (!content.bloggerHtmlBody || !content.bloggerTitle) {
+        setBloggerSyndicateStatus('failed');
+        setBloggerSyndicateError('No Blogger HTML body or title available');
+      } else {
+        const bgResult = await BloggerService.publishPost(
+          settings.bloggerBlogId,
+          {
+            title: customTitle || content.bloggerTitle,
+            content: content.bloggerHtmlBody,
+          },
+          settings.bloggerWebhookUrl
+        );
+        if (bgResult.success) {
+          setBloggerSyndicateStatus('success');
+          setBloggerSuccessUrl(bgResult.url || null);
+          bgSuccess = true;
+        } else {
+          setBloggerSyndicateStatus('failed');
+          setBloggerSyndicateError(bgResult.error || 'Failed to publish to Blogger');
+        }
+      }
+    } catch (bgErr: any) {
+      setBloggerSyndicateStatus('failed');
+      setBloggerSyndicateError(bgErr?.message || 'Blogger publishing failed');
+    }
+
+    setIsSyndicatingAll(false);
+
+    if (tgSuccess && bgSuccess) {
+      setStatusMessage('⚡ Omnichannel Autopilot complete! Published everywhere.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else if (tgSuccess || bgSuccess) {
+      setStatusMessage(`Partial sync: ${tgSuccess ? 'Telegram ✓' : ''} ${bgSuccess ? 'Blogger ✓' : ''}. Check warnings.`);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    } else {
+      setStatusMessage('Syndication failed. Verify Telegram & Blogger credentials.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
   };
 
   // Native Android Intent.ACTION_SEND & Deep-Link Ingestion
@@ -128,7 +225,7 @@ export default function GeneratorScreen() {
     resetOnBackground: true,
   });
 
-  const handleGenerateWithUrl = async (targetUrl: string) => {
+  const handleGenerateWithUrl = async (targetUrl: string, autoSyndicate = false) => {
     const cleanUrl = ProductScraper.extractUrlFromText(targetUrl);
     if (!cleanUrl) {
       setStatusMessage('Please paste a valid Amazon, Flipkart or Myntra link');
@@ -153,6 +250,10 @@ export default function GeneratorScreen() {
       setCustomImageUrl(product.imageUrl);
       setActiveProduct(product);
       setBloggerSuccessUrl(null);
+      setTelegramSyndicateStatus('idle');
+      setBloggerSyndicateStatus('idle');
+      setTelegramSyndicateError(undefined);
+      setBloggerSyndicateError(undefined);
 
       const gemini = new GeminiAiService(settings.geminiApiKey);
       const content = await gemini.generateOmnichannelDeal(product, 'all');
@@ -172,6 +273,11 @@ export default function GeneratorScreen() {
 
       setStatusMessage('Omnichannel deal ready for all platforms!');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Hands-free syndication if triggered from Android Share Target or Deep Link
+      if (autoSyndicate && settings.autoSyndicateOnShare) {
+        await executeSyndication(product, content);
+      }
     } catch (err: any) {
       setStatusMessage(`Error: ${err?.message || 'Failed to process product'}`);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -190,7 +296,7 @@ export default function GeneratorScreen() {
         resetShareIntent();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setStatusMessage('Shared deal received! Processing automatically...');
-        handleGenerateWithUrl(extracted);
+        handleGenerateWithUrl(extracted, true);
       }
     }
   }, [hasShareIntent, shareIntent]);
@@ -203,7 +309,7 @@ export default function GeneratorScreen() {
       if (extracted) {
         setInputUrl(extracted);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        handleGenerateWithUrl(extracted);
+        handleGenerateWithUrl(extracted, true);
       }
     };
 
@@ -522,6 +628,25 @@ export default function GeneratorScreen() {
                 onClear={handleClearDeal}
                 onRemove={handleClearDeal}
                 isCopiedUrl={isCopiedAffiliateUrl}
+              />
+
+              {/* Omnichannel Autopilot Syndication Dock */}
+              <OmnichannelSyndicateBar
+                onSyndicateAll={() => {
+                  if (activeProduct && activeContent) {
+                    executeSyndication(activeProduct, activeContent);
+                  }
+                }}
+                isSyndicating={isSyndicatingAll}
+                telegramStatus={telegramSyndicateStatus}
+                bloggerStatus={bloggerSyndicateStatus}
+                telegramError={telegramSyndicateError}
+                bloggerError={bloggerSyndicateError}
+                autoSyndicateEnabled={Boolean(settings.autoSyndicateOnShare)}
+                onToggleAutoSyndicate={() => {
+                  updateSettings({ autoSyndicateOnShare: !settings.autoSyndicateOnShare });
+                }}
+                hasContent={Boolean(activeContent)}
               />
 
               {/* Clean Segmented Channel Switcher */}

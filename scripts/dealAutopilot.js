@@ -369,13 +369,32 @@ async function publishToBlogger(deal) {
       });
 
       const text = await response.text();
-      if (text.includes('Sign in - Google Accounts') || response.status === 401) {
-        console.warn('⚠️ Blogger Webhook returned Google sign-in challenge. Set "Who has access" to "Anyone" in Apps Script.');
+      if (
+        response.status === 401 ||
+        response.status === 403 ||
+        text.includes('Sign in - Google Accounts') ||
+        text.includes('accounts.google.com') ||
+        text.includes('You need access') ||
+        text.includes('You need permission') ||
+        text.includes('docs.google.com/accounts')
+      ) {
+        console.warn('⚠️ Blogger Webhook returned 403 Forbidden / "You need access". In script.google.com -> Deploy -> Manage Deployments -> set "Who has access" to "Anyone" and deploy a "New version".');
         return false;
       }
 
-      console.log('✅ Successfully published deal to Blogger via Webhook!');
-      return true;
+      try {
+        const json = JSON.parse(text);
+        if (json.success) {
+          console.log(`✅ Successfully published deal to Blogger: ${json.url || json.id || 'OK'}`);
+          return true;
+        } else {
+          console.warn('⚠️ Blogger Webhook error:', json.error);
+          return false;
+        }
+      } catch {
+        console.warn('⚠️ Blogger Webhook did not return valid JSON confirmation. Received HTML instead.');
+        return false;
+      }
     } catch (e) {
       console.warn('⚠️ Webhook publishing failed:', e.message);
     }
